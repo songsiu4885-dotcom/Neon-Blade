@@ -40,23 +40,30 @@ export class Combat {
     this.scene.add(enemy.group);
   }
 
-  // 플레이어 앞쪽 가까운 적을 잡는다. 현재 타겟은 약간 유지(떨림 방지).
-  updateTarget(player) {
-    const fx = -Math.sin(player.facing), fz = -Math.cos(player.facing);
-    const score = (e) => {
+  // 자동 락온: 카메라가 보는 쪽(화면 가운데)에 가깝고 거리가 가까운 적을 잡는다.
+  // 아주 가까운 적(3m)은 방향과 상관없이 후보. 한 번 잡은 대상은 쉽게 바뀌지 않고, 공격 중에는 유지한다.
+  updateTarget(player, rig) {
+    const f = rig ? rig.forward() : this._v.set(-Math.sin(player.facing), 0, -Math.cos(player.facing));
+    const info = (e) => {
       const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z;
       const d = Math.hypot(dx, dz) || 1e-6;
-      return d - 5 * ((dx * fx + dz * fz) / d) - (e.broken ? 10 : 0);
+      const ang = Math.acos(THREE.MathUtils.clamp((dx * f.x + dz * f.z) / d, -1, 1));
+      return { d, ang, score: d / 12 + ang * 1.3 - (e.broken ? 0.6 : 0) - (e.boss ? 0.3 : 0) };
     };
-    const dist = (e) => Math.hypot(e.pos.x - player.pos.x, e.pos.z - player.pos.z);
+    const cur = this.target;
+    const curOk = cur && cur.alive && !cur.dead;
+    if (curOk && player.atk) return; // 공격 중에는 대상을 바꾸지 않는다
     let best = null, bs = Infinity;
     for (const e of this.enemies) {
-      if (!e.alive || dist(e) > 16) continue;
-      const s = score(e);
-      if (s < bs) { bs = s; best = e; }
+      if (!e.alive) continue;
+      const k = info(e);
+      if (k.d > 14 || (k.ang > THREE.MathUtils.degToRad(75) && k.d > 3)) continue;
+      if (k.score < bs) { bs = k.score; best = e; }
     }
-    const cur = this.target;
-    if (cur && cur.alive && dist(cur) < 18 && score(cur) <= bs + 2.5) best = cur;
+    if (curOk) {
+      const k = info(cur);
+      if (k.d < 16 && (k.ang < THREE.MathUtils.degToRad(100) || k.d < 3) && k.score <= bs + 0.45) best = cur;
+    }
     this.target = best;
   }
 

@@ -3,8 +3,9 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-// 후처리(블룸 하나만) + 속도선
+// 후처리(블룸 하나만) + 대시 잔상 + 속도선
 export class FX {
   constructor(renderer, scene, camera) {
     this.scene = scene;
@@ -20,6 +21,7 @@ export class FX {
     this.bloom.setSize(innerWidth / 2, innerHeight / 2);
 
     this._initRings();
+    this.ghosts = []; this.ghostRig = null; this.ghostTimer = 0; this.ghostIdx = 0;
     this._initSpeedLines();
     this.particles = new Particles(scene);
     // 처형용 베기 선 (빌보드 얇은 판)
@@ -45,6 +47,56 @@ export class FX {
 
   render() {
     this.composer.render();
+  }
+
+  // ---- 잔상: 캐릭터(뼈대와 칼 포함)를 복제한 빛의 실루엣. 대시할 때 그 순간의 자세를 남긴다 ----
+  _buildGhosts(player) {
+    for (const g of this.ghosts) this.scene.remove(g);
+    this.ghosts = [];
+    for (let i = 0; i < 8; i++) {
+      const g = cloneSkinned(player.model);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+      g.traverse((o) => { if (o.isMesh) { o.material = mat; o.frustumCulled = false; } });
+      const nodes = []; g.traverse((o) => nodes.push(o));
+      g.userData = { mat, life: 0, nodes };
+      g.visible = false;
+      this.scene.add(g);
+      this.ghosts.push(g);
+    }
+    this.srcNodes = []; player.model.traverse((o) => this.srcNodes.push(o));
+    this.ghostRig = player.rig;
+  }
+
+  _spawnGhost(player) {
+    const g = this.ghosts[this.ghostIdx++ % this.ghosts.length];
+    const dst = g.userData.nodes, src = this.srcNodes;
+    for (let i = 0; i < dst.length && i < src.length; i++) {
+      dst[i].position.copy(src[i].position); dst[i].quaternion.copy(src[i].quaternion); dst[i].scale.copy(src[i].scale);
+    }
+    g.position.add(player.pos);
+    g.userData.life = 1;
+    g.userData.gold = player.rampage;
+    g.visible = true;
+  }
+
+  _updateGhosts(dt, player) {
+    if (this.ghostRig !== player.rig) this._buildGhosts(player); // 모델이 바뀌면(로딩 완료) 다시 만든다
+    const spin = player.atk && player.atk.def.spin && player.swinging;
+    if (player.dashing || spin) {
+      this.ghostTimer -= dt;
+      if (this.ghostTimer <= 0) { this._spawnGhost(player); this.ghostTimer = player.dashing ? 0.03 : 0.045; }
+    } else this.ghostTimer = 0;
+    for (const g of this.ghosts) {
+      if (!g.visible) continue;
+      const u = g.userData;
+      u.life -= dt / 0.28;
+      if (u.life <= 0) { g.visible = false; continue; }
+      const l = u.life;
+      // 새것은 하얀 시안, 사라질수록 마젠타 (폭주 중에는 금빛)
+      if (u.gold) u.mat.color.setRGB(1.1 * l + 0.7, 0.75 * l + 0.25, 0.15 * l + 0.05);
+      else u.mat.color.setRGB(0.55 * l + 0.75 * (1 - l), 1.15 * l + 0.15 * (1 - l), 1.25 * l + 0.95 * (1 - l));
+      u.mat.opacity = Math.pow(l, 1.6) * 0.24;
+    }
   }
 
   // ---- 바닥 충격파 링 ----
@@ -144,6 +196,7 @@ export class FX {
   }
 
   update(dt, player) {
+    this._updateGhosts(dt, player);
     this.particles.update(dt);
     for (const m of this.slashes) {
       if (!m.visible) continue;

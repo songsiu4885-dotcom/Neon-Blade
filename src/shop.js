@@ -98,7 +98,7 @@ export class DoctorShop {
 }
 
 // ---- 배낭: 능력치 / 장착 칩 / 보유 칩 / 아이템 + 설정 ----
-export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'high', help: true };
+export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'high', help: true, lockCam: true };
 
 export class Backpack {
   constructor(ctx) {
@@ -185,6 +185,7 @@ export class Backpack {
       `<label>음악 볼륨<input type="range" min="0" max="1" step="0.05" data-k="music" value="${s.music}"></label>` +
       `<label>시점 감도<input type="range" min="0.3" max="2.5" step="0.1" data-k="sens" value="${s.sens}"></label>` +
       `<label class="row">화면 흔들림<input type="checkbox" data-k="shake" ${s.shake ? 'checked' : ''}></label>` +
+      `<label class="row">락온 카메라 보조<input type="checkbox" data-k="lockCam" ${s.lockCam ? 'checked' : ''}></label>` +
       `<label class="row">조작 안내 표시<input type="checkbox" data-k="help" ${s.help ? 'checked' : ''}></label>` +
       `<label class="row">그래픽 품질<select data-k="quality"><option value="high"${s.quality === 'high' ? ' selected' : ''}>높음</option><option value="low"${s.quality === 'low' ? ' selected' : ''}>낮음 (빠름)</option></select></label>` +
       `<div class="set-btns"><button class="btn alt" id="setRestart">처음부터</button></div>`;

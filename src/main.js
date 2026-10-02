@@ -401,7 +401,8 @@ function frame() {
 
   const inp = input.poll();
   rig.applyLook(dt, inp, input.isTouch);
-  combat.updateTarget(player);
+  combat.updateTarget(player, rig);
+  rig.assist(dt, player, settings.lockCam ? combat.target : null);
   player.update(simDt, inp, rig, combat);
   combat.update(eDt, player);
   zones.update(simDt, player);

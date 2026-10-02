@@ -180,17 +180,12 @@ export class Player {
 
   _startAttack(kind, wish, combat) {
     const def = kind === 'dashSlash' ? DASH_SLASH : kind === 'heavy' ? HEAVY : COMBO[this.comboIdx];
-    // 조준 보정: 가까운 락온 대상 > 이동 입력 방향 > 현재 바라보는 방향
+    // 조준 보정: 기본은 이동 입력(없으면 바라보는 방향). 락온 대상이 가깝고(6m) 그 방향에서 70° 안일 때만 대상 쪽으로 돌린다.
+    let dir = kind === 'dashSlash' ? this.dashDir.clone() : wish.lengthSq() > 0.01 ? wish.clone().normalize() : this._facingDir();
     const tg = combat?.target;
-    let dir;
-    if (tg && this._distTo(tg) < 10) {
-      dir = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
-    } else if (kind === 'dashSlash') {
-      dir = this.dashDir.clone();
-    } else if (wish.lengthSq() > 0.01) {
-      dir = wish.clone().normalize();
-    } else {
-      dir = this._facingDir();
+    if (tg && tg.alive && this._distTo(tg) < 6) {
+      const to = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
+      if (to.dot(dir) > Math.cos(THREE.MathUtils.degToRad(70))) dir = to;
     }
     this.atkDir.copy(dir);
     this.facing = Math.atan2(-dir.x, -dir.z);
@@ -285,7 +280,7 @@ export class Player {
       if (tg) {
         const to = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z);
         const d = to.length();
-        if (d > 1 && d < 16 && to.normalize().dot(dir) > Math.cos(THREE.MathUtils.degToRad(50))) {
+        if (d > 1 && d < 12 && to.normalize().dot(dir) > Math.cos(THREE.MathUtils.degToRad(35))) {
           dir.copy(to);
           this.dashTarget = tg;
         }

@@ -32,7 +32,6 @@ export function loadHero() {
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
-const CURL = 1; // 손가락이 손바닥 쪽으로 말리는 방향
 
 // 뼈의 월드 방향(자식 쪽)을 target 쪽으로 돌린다
 function aimBone(bone, child, target) {
@@ -273,9 +272,6 @@ export class HeroAnimator {
     R.pivot.position.copy(R.root.worldToLocal(this._g));
     R.pivot.updateMatrixWorld(true);
     this._rightArm();
-    // 칼 쥔 손가락은 주먹을 쥔다
-    const knuckle = B.RightHandIndex1 && B.RightHandPinky1 ? B.RightHandIndex1.getWorldPosition(new THREE.Vector3()).sub(B.RightHandPinky1.getWorldPosition(new THREE.Vector3())).normalize() : null;
-    if (knuckle) for (const f of R.fingers) rotateWorld(f, knuckle, CURL * 0.75);
 
     // ---- 왼팔: 가드 / 돌진 때 뒤로 뻗기 ----
     const wL = Math.min(1, W.atk + W.charge + W.dash);
@@ -300,17 +296,58 @@ export class HeroAnimator {
     });
   }
 
-  // 오른팔 IK: 손목은 주먹 중심(칼 손잡이)보다 조금 뒤. 팔꿈치 방향은 손 높이와 위치에 따라 바뀐다
+  // 오른팔 IK + 칼 쥔 손.
+  // 손가락은 손잡이에 수직으로 뻗고 손가락 마디 줄은 손잡이와 나란하게(검지가 칼날 쪽) 맞춘다.
+  // 손을 비트는 각도는 팔뚝(60%)과 손목(40%)이 나눠 가져서 손목이 꼬여 보이지 않게 한다.
   _rightArm() {
     const R = this.rig, B = R.bones;
     const S = B.RightArm.getWorldPosition(new THREE.Vector3());
     const G = R.sword.getWorldPosition(new THREE.Vector3());
+    const H = UP.clone().applyQuaternion(R.sword.getWorldQuaternion(new THREE.Quaternion())); // 손잡이 축 (칼날 쪽)
     const dir = G.clone().sub(S).normalize();
+    // 손가락 방향: 팔 방향에서 손잡이 축 성분을 뺀 것
+    const fdir = dir.clone().addScaledVector(H, -dir.dot(H));
+    if (fdir.lengthSq() < 1e-4) fdir.set(0, -1, 0).applyQuaternion(this._yawQ).addScaledVector(H, -H.y);
+    fdir.normalize();
     const local = dir.clone().applyQuaternion(this._yawQ.clone().invert()); // 몸 기준 방향
     const up = clamp(local.y, 0, 1), cross = clamp(-local.x, 0, 1);
     const pole = this._pole.set(0.7 + 0.1 * up - 0.3 * cross, -0.6 * (1 - up) + 0.25 * up, 0.35 - 0.6 * up - 0.4 * cross).applyQuaternion(this._yawQ);
-    const wrist = G.clone().addScaledVector(dir, -0.07);
+    const wrist = G.clone().addScaledVector(fdir, -0.075);
     twoBone(B.RightArm, B.RightForeArm, B.RightHand, wrist, pole);
-    aimBone(B.RightHand, B.RightHandMiddle1 || B.RightHandIndex1, G.addScaledVector(dir, 0.05));
+
+    const mid = B.RightHandMiddle1, idx = B.RightHandIndex1, pky = B.RightHandPinky1;
+    if (!mid || !idx || !pky) return;
+    const aimFingers = () => { const hp = B.RightHand.getWorldPosition(new THREE.Vector3()); aimBone(B.RightHand, mid, hp.addScaledVector(fdir, 0.1)); };
+    // 손가락 마디 줄(검지→새끼 반대)을 손잡이 축에 맞추는 데 필요한 비틀림 각도
+    const rollNeeded = () => {
+      const hp = B.RightHand.getWorldPosition(new THREE.Vector3());
+      const fd = mid.getWorldPosition(new THREE.Vector3()).sub(hp).normalize();
+      const kn = idx.getWorldPosition(new THREE.Vector3()).sub(pky.getWorldPosition(new THREE.Vector3()));
+      kn.addScaledVector(fd, -kn.dot(fd)).normalize();
+      const hp2 = H.clone().addScaledVector(fd, -H.dot(fd)).normalize();
+      return { fd, angle: Math.atan2(fd.dot(kn.clone().cross(hp2)), kn.dot(hp2)) };
+    };
+    aimFingers();
+    const r1 = rollNeeded();
+    const forearmAxis = B.RightHand.getWorldPosition(new THREE.Vector3()).sub(B.RightForeArm.getWorldPosition(new THREE.Vector3())).normalize();
+    rotateWorld(B.RightForeArm, forearmAxis, r1.angle * 0.6);
+    aimFingers();
+    const r2 = rollNeeded();
+    rotateWorld(B.RightHand, r2.fd, r2.angle);
+
+    // 손가락을 손잡이 쪽으로 감는다. 감는 방향(부호)은 처음 한 번 손끝이 손잡이에 가까워지는 쪽으로 정한다.
+    const axis = idx.getWorldPosition(new THREE.Vector3()).sub(pky.getWorldPosition(new THREE.Vector3())).normalize();
+    if (R.curlSign == null) {
+      const tip = B.RightHandMiddle4 || B.RightHandMiddle3;
+      const line = (p) => { const v = p.clone().sub(G); return v.addScaledVector(H, -v.dot(H)).length(); };
+      const save = R.fingers.map((f) => f.quaternion.clone());
+      const test = (sg) => { R.fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); }); for (const f of R.fingers) rotateWorld(f, axis, sg * 0.5); return line(tip.getWorldPosition(new THREE.Vector3())); };
+      const a = test(1), b = test(-1);
+      R.fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); });
+      R.curlSign = a < b ? 1 : -1;
+    }
+    for (const f of R.fingers) rotateWorld(f, axis, R.curlSign * 0.62);
+    const thumb = B.RightHandThumb2;
+    if (thumb) rotateWorld(thumb, axis, R.curlSign * 0.35);
   }
 }
