@@ -228,20 +228,20 @@ export function buildStreet(scene) {
   // ---- 낡고 더러운 아스팔트: 금, 기름때, 덧댄 자국 (16m 타일) ----
   {
     const [c, g] = canvas(512, 512);
-    g.fillStyle = '#2a2826'; g.fillRect(0, 0, 512, 512);
+    g.fillStyle = '#4a4642'; g.fillRect(0, 0, 512, 512);
     for (let i = 0; i < 9000; i++) { // 자갈 알갱이
-      const v = 20 + Math.random() * 40;
+      const v = 45 + Math.random() * 55;
       g.fillStyle = `rgba(${v},${v - 2},${v - 4},${0.3 + Math.random() * 0.4})`;
       g.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 1 + Math.random() * 2);
     }
     for (let i = 0; i < 7; i++) { // 덧댄 아스팔트 조각
-      g.fillStyle = `rgba(${18 + Math.random() * 10},${17 + Math.random() * 8},${16},0.85)`;
+      g.fillStyle = `rgba(${34 + Math.random() * 14},${32 + Math.random() * 12},${30},0.85)`;
       g.fillRect(Math.random() * 450, Math.random() * 450, 30 + Math.random() * 120, 20 + Math.random() * 90);
     }
     for (let i = 0; i < 26; i++) { // 기름때 / 젖은 얼룩
       const x = Math.random() * 512, y = Math.random() * 512, r = 10 + Math.random() * 50;
       const gr = g.createRadialGradient(x, y, 0, x, y, r);
-      gr.addColorStop(0, 'rgba(8,8,10,0.55)'); gr.addColorStop(1, 'rgba(8,8,10,0)');
+      gr.addColorStop(0, 'rgba(14,13,14,0.6)'); gr.addColorStop(1, 'rgba(14,13,14,0)');
       g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * (0.4 + Math.random() * 0.6), Math.random() * 3, 0, 7); g.fill();
     }
     g.strokeStyle = 'rgba(6,6,6,0.8)'; g.lineCap = 'round';
@@ -251,11 +251,11 @@ export function buildStreet(scene) {
       for (let k = 0; k < 8; k++) { x += (Math.random() - 0.5) * 50; y += (Math.random() - 0.5) * 50; g.lineTo(x, y); }
       g.stroke();
     }
-    g.fillStyle = 'rgba(120,110,70,0.25)'; // 거의 지워진 노면 표시
+    g.fillStyle = 'rgba(190,175,110,0.35)'; // 거의 지워진 노면 표시
     for (let y = 0; y < 512; y += 64) if (Math.random() < 0.6) g.fillRect(250, y, 10, 30);
     const t = tex(c, true); t.repeat.set(150, 150);
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ map: t, color: 0x9a948c, roughness: 0.93, metalness: 0.0, envMapIntensity: 0.15 })));
+      new THREE.MeshStandardMaterial({ map: t, color: 0xd6d0c6, roughness: 0.9, metalness: 0.0, envMapIntensity: 0.15 })));
   }
 
   const facades = [facade(0), facade(1), facade(2)];
@@ -598,18 +598,18 @@ export function buildStreet(scene) {
         const p = edgeSpot(r), roll = Math.random();
         if (roll < 0.45) for (let j = 0, m = 1 + Math.floor(Math.random() * 4); j < m; j++) {
           const s2 = rnd(0.35, 0.6);
-          bags.push({ p: V(p.x + rnd(-0.6, 0.6), s2 * 0.4, p.z + rnd(-0.6, 0.6)), s: V(s2, s2 * 0.8, s2 * rnd(0.8, 1.2)), c: col(pick([0x15161a, 0x1c1e22, 0x2a2a1e, 0x1a2230]), 1) });
+          bags.push({ p: V(p.x + rnd(-0.6, 0.6), s2 * 0.4, p.z + rnd(-0.6, 0.6)), s: V(s2, s2 * 0.8, s2 * rnd(0.8, 1.2)), c: col(pick([0x2a2c32, 0x34363c, 0x3e3e2c, 0x2c3a4a]), 1) });
         }
         else if (roll < 0.75) {
           const s2 = rnd(0.5, 0.9);
-          crates.push({ p: V(p.x, s2 / 2, p.z), s: V(s2, s2 * rnd(0.6, 1), s2 * rnd(0.8, 1.3)), c: col(pick([0x4a3a28, 0x3a3228, 0x2a3a30, 0x55483a]), 0.8) });
+          crates.push({ p: V(p.x, s2 / 2, p.z), s: V(s2, s2 * rnd(0.6, 1), s2 * rnd(0.8, 1.3)), c: col(pick([0x6a5236, 0x5a4a38, 0x3e5644, 0x7a6650]), 0.9) });
           if (Math.random() < 0.4) crates.push({ p: V(p.x + rnd(-0.1, 0.1), s2 + 0.2, p.z), s: V(s2 * 0.7, 0.4, s2 * 0.7), c: col(0x3a3228, 0.8) });
         } else {
-          drums.push({ p: V(p.x, 0.45, p.z), s: V(1, 1, 1), c: col(pick([0x3a2a20, 0x2a3440, 0x4a2a1a, 0x2e2e2e]), 1) });
+          drums.push({ p: V(p.x, 0.45, p.z), s: V(1, 1, 1), c: col(pick([0x6a3a24, 0x34506a, 0x7a3a1c, 0x4e4e4e]), 1) });
         }
       }
       const area = (r.x1 - r.x0) * (r.z1 - r.z0);
-      for (let k = 0; k < area / 50; k++) papers.push({ p: V(rnd(r.x0 + 0.5, r.x1 - 0.5), 0.02, rnd(r.z0 + 0.5, r.z1 - 0.5)), s: V(rnd(0.2, 0.45), 1, rnd(0.25, 0.4)), c: col(pick([0x8a8576, 0x6a665a, 0x9a8a6a, 0x5a6066]), 0.55) });
+      for (let k = 0; k < area / 50; k++) papers.push({ p: V(rnd(r.x0 + 0.5, r.x1 - 0.5), 0.02, rnd(r.z0 + 0.5, r.z1 - 0.5)), s: V(rnd(0.2, 0.45), 1, rnd(0.25, 0.4)), c: col(pick([0x8a8576, 0x6a665a, 0x9a8a6a, 0x5a6066]), 0.85) });
       for (let k = 0; k < area / 160; k++) stains.push({ p: V(rnd(r.x0, r.x1), 0.015, rnd(r.z0, r.z1)), s: V(rnd(2, 6), 1, rnd(2, 6)), c: col(0x000000) });
     }
     const dirt = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.05 });
@@ -774,7 +774,8 @@ export function buildStreet(scene) {
     return tex(c);
   })();
   const gateMats = [];
-  const gates = GATE_Z.map((gz, i) => {
+  // 방벽 하나: 그 z에서 걸을 수 있는 폭 전체를 막는다
+  const makeGate = (gz) => {
     let mn = Infinity, mx = -Infinity;
     for (const r of RECTS) if (gz > r.z0 && gz < r.z1) { mn = Math.min(mn, r.x0); mx = Math.max(mx, r.x1); }
     const W = mx - mn, cx = (mn + mx) / 2, H = 12;
@@ -814,8 +815,12 @@ export function buildStreet(scene) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.6), new THREE.MeshBasicMaterial({ map: gateTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
     sign.position.y = H + 3.2; g.add(sign);
     scene.add(g);
-    return { z: gz, group: g, mat, W, open: false, openT: 0, sign };
-  });
+    return { z: gz, group: g, mat, W, open: false, openT: 0, closing: false, sign };
+  };
+  const gates = GATE_Z.map(makeGate);
+  // 뒤쪽 방벽: 적과 마주치면 플레이어 뒤에 솟아 도망칠 수 없게 하고, 구역을 정리하면 함께 열린다
+  let rear = null;
+  const dropRearNow = () => { if (rear) { scene.remove(rear.group); rear.mat.dispose(); rear = null; } };
 
   // ---- 월드 API ----
   const inside = (x, z, m) => WALK.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
@@ -832,9 +837,15 @@ export function buildStreet(scene) {
     // 체크포인트용: i 이전 방벽은 열고 i부터는 닫는다
     setGates(i) { gates.forEach((g, k) => { g.open = k < i; g.openT = g.open ? 1 : 0; g.group.visible = !g.open; g.mat.uniforms.uOpen.value = g.open ? 1 : 0; }); },
     // 걸을 수 있는 영역 안으로 밀어 넣고, 닫힌 방벽을 넘지 못하게 한다
-    resolve(p, r = 0.5) {
+    raiseRear(z) { dropRearNow(); rear = makeGate(z); rear.openT = 1; rear.closing = true; rear.mat.uniforms.uOpen.value = 1; },
+    lowerRear() { if (rear && !rear.open) { rear.open = true; rear.closing = false; } },
+    clearRear: dropRearNow,
+    get rear() { return rear; },
+    // 걸을 수 있는 영역 안으로 밀어 넣고, 닫힌 방벽을 넘지 못하게 한다 (walls=false: 카메라는 뒤쪽 방벽을 통과해 본다)
+    resolve(p, r = 0.5, walls = true) {
       const gt = curGate();
       if (gt && p.z < gt.z + r) p.z = gt.z + r;
+      if (walls && rear && !rear.open && p.z > rear.z - r) p.z = rear.z - r;
       if (inside(p.x, p.z, r)) return;
       let bx = p.x, bz = p.z, bd = Infinity;
       for (const R of WALK) {
@@ -857,6 +868,11 @@ export function buildStreet(scene) {
     },
     update(dt, playerPos, camera, viewportH) {
       time += dt;
+      if (rear) { // 뒤쪽 방벽: 솟을 때는 조각이 모여들고, 열릴 때는 흩어진 뒤 치운다
+        rear.mat.uniforms.uTime.value = time;
+        if (rear.closing) { rear.openT = Math.max(0, rear.openT - dt / 0.5); rear.mat.uniforms.uOpen.value = rear.openT; if (rear.openT <= 0) rear.closing = false; }
+        else if (rear.open) { rear.openT = Math.min(1, rear.openT + dt / 0.9); rear.mat.uniforms.uOpen.value = rear.openT; rear.sign.visible = false; if (rear.openT >= 1) dropRearNow(); }
+      }
       for (const g of gates) { // 열리는 방벽은 흩어지듯 사라진다
         g.mat.uniforms.uTime.value = time;
         if (g.open && g.openT < 1) {

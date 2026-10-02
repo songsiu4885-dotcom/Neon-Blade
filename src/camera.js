@@ -89,7 +89,7 @@ export class CameraRig {
       this.shakeAmp *= Math.exp(-12 * dt);
     }
 
-    this.world?.resolve(pos, 0.8);
+    this.world?.resolve(pos, 0.8, false);
     this.camera.position.copy(pos);
     this.camera.lookAt(this.target);
   }

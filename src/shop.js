@@ -105,6 +105,7 @@ export class Backpack {
     this.ctx = ctx; // { inv, onChange(), useKit(), pause(bool), applySettings(s), settings, stats(), restart() }
     this.el = $('pack');
     this.setEl = $('settings');
+    this.gear = $('gearBtn');
     this.btn = $('packBtn');
     this.isOpen = false;
     const toggle = (e) => { e.stopPropagation(); e.preventDefault?.(); this.toggle(); };
@@ -114,7 +115,18 @@ export class Backpack {
       if (e.code === 'Tab' || e.code === 'KeyI') { e.preventDefault(); this.toggle(); }
       if (e.code === 'Escape' && this.isOpen) this.close();
     });
+    const gear = (e) => { e.stopPropagation(); e.preventDefault?.(); this.toggleSettings(); };
+    this.gear.addEventListener('click', gear);
+    this.gear.addEventListener('touchstart', gear, { passive: false });
     this._renderSettings();
+  }
+
+  // 배낭 아래 톱니바퀴: 누를 때마다 설정 창을 열고 닫는다
+  toggleSettings(force) {
+    const on = force ?? !this.setEl.classList.contains('on');
+    this.setEl.classList.toggle('on', on);
+    this.gear.classList.toggle('on', on);
+    this.ctx.audio.select?.();
   }
 
   toggle() { this.isOpen ? this.close() : this.openPack(); }
@@ -122,7 +134,8 @@ export class Backpack {
     if (this.ctx.blocked()) return;
     this.isOpen = true;
     document.exitPointerLock?.();
-    this.el.classList.add('on'); this.setEl.classList.add('on'); this.btn.classList.add('on');
+    this.el.classList.add('on'); this.gear.classList.add('show'); this.btn.classList.add('on');
+    this.setEl.classList.remove('on'); this.gear.classList.remove('on');
     this.ctx.pause(true);
     this.render();
   }
@@ -130,6 +143,7 @@ export class Backpack {
     if (!this.isOpen) return;
     this.isOpen = false;
     this.el.classList.remove('on'); this.setEl.classList.remove('on'); this.btn.classList.remove('on');
+    this.gear.classList.remove('show', 'on');
     this.ctx.pause(false);
   }
 

@@ -46,6 +46,7 @@ class AudioSys {
     this._rain();
     this.next = ctx.currentTime + 0.1;
     this._timer = setInterval(() => this._tick(), 25);
+    this.bindVisibility();
   }
 
   toggleMute() {
@@ -56,6 +57,18 @@ class AudioSys {
   }
 
   setMode(m) { this.mode = m; }
+
+  // 다른 탭/앱으로 가면 소리를 완전히 멈추고, 돌아오면 다시 켠다 (빗소리 같은 반복음이 뒤에서 계속 나지 않게)
+  bindVisibility() {
+    const sync = () => {
+      if (!this.ctx) return;
+      if (document.hidden) this.ctx.suspend?.();
+      else this.ctx.resume?.();
+    };
+    document.addEventListener('visibilitychange', sync);
+    addEventListener('pagehide', () => this.ctx?.suspend?.());
+    addEventListener('pageshow', sync);
+  }
 
   // ---------- 합성 부품 ----------
   _tone(type, f0, f1, dur, vol, o = {}) {

@@ -10,7 +10,7 @@ const fwd = (e) => V3(-Math.sin(e.facing), 0, -Math.cos(e.facing));
 const rand = (a, b) => a + Math.random() * (b - a);
 const circle = (r) => { const m = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), warnMaterial()); m.scale.set(r, 1, r); m.position.y = 0.07; m.visible = false; return m; };
 
-// 관리자 〈크로노스〉: 3단계 보스.
+// 관리자 〈아담〉: 3단계 보스.
 //  1단계: 내려찍기(앞쪽 원), 회전 베기(자신 중심 원)
 //  2단계(HP 66%): 돌진 추가, 졸개 호출
 //  3단계(HP 33%): 전방위 탄막 추가, 공격 가속, 졸개 호출
@@ -21,7 +21,7 @@ export class Boss extends Enemy {
     this.boss = true; this.elite = true;
     this.pos.set(x, 0, z);
     this.executionDamage = 240;      // 자세가 무너졌을 때 처형 한 방의 피해
-    this.name = '관리자 크로노스';
+    this.name = '관리자 아담';
     this.phase = 1;
     this.state = 'intro'; this.t = 0; this.cd = 1.5;
     this.J = buildGuardRobot(this, { shell: 0x2a2038, rim: 0xff2bd6, vent: 0x00e5ff, weapon: 'maul' });

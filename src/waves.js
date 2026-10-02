@@ -33,6 +33,7 @@ export class Zones {
     this.cleared = false;
     this.enabled = false;
     this.world.setGates(0);
+    this.world.clearRear();
     this.combat.ctx.maxAtk = 4;
   }
 
@@ -43,6 +44,7 @@ export class Zones {
     this.combat.projectiles.clear();
     this.state = 'travel'; this.k = 0; this.timer = 0;
     this.world.setGates(this.i);
+    this.world.clearRear();
   }
 
   get zone() { return this.zones[this.i]; }
@@ -62,7 +64,7 @@ export class Zones {
     const wave = ZONE_WAVES[this.i][this.k++];
     const gate = this.world.curGate();
     const zMin = gate ? gate.z + 3 : this.zone.triggerZ - 120;
-    const zMax = this.zone.triggerZ + 14;
+    const zMax = this.zone.triggerZ + 2.5; // 뒤쪽 방벽(시작선 +5m) 안쪽에만 나타난다
     for (const [type, count] of Object.entries(wave)) {
       const Cls = REG[type];
       for (let n = 0; n < count; n++) {
@@ -77,6 +79,7 @@ export class Zones {
 
   async _begin(player) {
     this.state = 'cine';                         // 중복 시작 방지
+    this.world.raiseRear(this.zone.triggerZ + 5); // 적과 마주친 순간 뒤쪽도 막힌다
     await this.zone.pre?.();                     // 막 (보스 등장 등)
     this.combat.ctx.maxAtk = Math.min(6, 4 + Math.floor(this.i / 3));
     this.hooks.onStart?.(this.i);
@@ -103,6 +106,7 @@ export class Zones {
       } else if (alive === 0 && this.timer <= 0) {
         this.state = 'done';
         if (z.gate != null) this.world.openGate(z.gate);
+        this.world.lowerRear();
         const last = this.i >= this.total - 1;
         this.hooks.onClear?.(this.i);
         if (last) { this.cleared = true; this.hooks.onAllClear?.(); }

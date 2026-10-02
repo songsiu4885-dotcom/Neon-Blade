@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // 주인공: 실제 스키닝 모델 + 모션캡처 걷기/달리기/대기.
-// 갑옷은 어둡게 칠하고 바이저와 팔·다리 발광선, 붉은 목도리를 붙인다.
+// 갑옷은 흰색으로 칠하고 바이저와 팔·다리 발광선, 붉은 목도리를 붙인다.
 // 걷기/달리기/대기는 모션캡처를 쓰고, 그 위에 칼 잡은 팔(IK), 왼팔 가드, 돌진 런지, 허리 비틀기를 덧입힌다.
 
 const URL = `${import.meta.env.BASE_URL}models/Soldier.glb`;
@@ -68,7 +68,7 @@ function twoBone(b1, b2, b3, target, pole) {
   aimBone(b2, b3, end);
 }
 
-// 텍스처를 흑백으로 바꾸고 밝은 부분은 차가운 금속빛, 어두운 부분은 검정에 가깝게
+// 텍스처를 흑백으로 바꿔 흰 갑옷으로 칠한다 (명암 무늬만 남긴다)
 function regrade(t) {
   const img = t.image, w = img.width, h = img.height;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -76,8 +76,9 @@ function regrade(t) {
   const d = g.getImageData(0, 0, w, h), p = d.data;
   for (let i = 0; i < p.length; i += 4) {
     const l = (p[i] * 0.3 + p[i + 1] * 0.59 + p[i + 2] * 0.11) / 255;
-    const v = Math.pow(l, 1.25);
-    p[i] = 255 * (0.08 + 0.78 * v); p[i + 1] = 255 * (0.09 + 0.82 * v); p[i + 2] = 255 * (0.11 + 0.9 * v);
+    const v = Math.pow(l, 0.8);
+    // 흰 갑옷: 밝은 면은 거의 흰색, 무늬의 어두운 부분은 회색 이음새로 남는다
+    p[i] = 255 * (0.3 + 0.68 * v); p[i + 1] = 255 * (0.31 + 0.68 * v); p[i + 2] = 255 * (0.33 + 0.67 * v);
   }
   g.putImageData(d, 0, 0);
   const nt = new THREE.CanvasTexture(c);
@@ -99,10 +100,10 @@ export function buildHero(gltf) {
       if (/visor/i.test(m.name)) {
         o.material = new THREE.MeshStandardMaterial({ color: 0x0a1a20, emissive: new THREE.Color(0.25, 1.6, 1.9), emissiveIntensity: 1, roughness: 0.15, metalness: 0.6 });
       } else {
-        // 원래 텍스처의 무늬(명암)만 살리고 색은 빼서 어두운 건메탈로
+        // 원래 텍스처의 무늬(명암)만 살리고 흰 갑옷으로
         if (m.map?.image) m.map = regrade(m.map);
-        m.color.setRGB(0.34, 0.37, 0.43);
-        m.metalness = 0.35; m.roughness = 0.5;
+        m.color.setRGB(0.95, 0.96, 1.0);
+        m.metalness = 0.15; m.roughness = 0.45;
         m.envMapIntensity = 0.6;
       }
     }

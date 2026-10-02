@@ -117,6 +117,10 @@
   #cine .cl{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);width:min(86vw,760px);text-align:center;color:#f2f8ff;font-size:clamp(16px,2.4vw,22px);line-height:1.7;text-shadow:0 2px 8px #000}
   #cine .cl b{display:block;margin-bottom:4px;font-size:12px;letter-spacing:6px}
   #cine .cl p{margin:0;min-height:3.4em}
+  #cine.black{background:#000;animation:none;transition:background 1.2s ease}
+  #cine.black .bar,#cine.black::before{display:none}
+  #cine.black .cl{bottom:auto;top:50%;transform:translate(-50%,-50%);font-size:clamp(17px,2.6vw,24px);line-height:1.9}
+  #cine.black.reveal{background:#0000}
   #cine .hint{position:absolute;right:20px;bottom:15%;font-size:11px;letter-spacing:2px;color:#9fb4c4;opacity:.7}
   body.cine #hud,body.cine #hp,body.cine #rg,body.cine #stage,body.cine #obj,body.cine #boss,body.cine #combo,body.cine #bars,body.cine #dashBtn,body.cine #atkBtn,body.cine #help,body.cine #lzone,body.cine #rzone,body.cine #stick,body.cine #packBtn,body.cine #credits,body.cine #callBtn{opacity:0 !important;pointer-events:none}
   #toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);padding:10px 22px;background:#0b0f2ae6;border:1px solid #ffd54a;color:#ffe9a8;font-weight:700;letter-spacing:2px;opacity:0;pointer-events:none;text-align:center;z-index:6}
@@ -149,8 +153,15 @@
   .pchip:hover{background:#1e1b22}
   .empty{color:#7a7468;font-size:12px}
   .pk-foot{margin:12px 0 0;font-size:11px;color:#7a7468}
-  #settings{position:fixed;right:14px;bottom:14px;width:230px;z-index:12;display:none;padding:12px 14px;background:#0d0c11f2;border:1px solid #5a5244;color:#d8d4cc;font-size:12px}
+  #settings{position:fixed;right:14px;bottom:74px;width:230px;z-index:12;display:none;padding:12px 14px;background:#0d0c11f2;border:1px solid #5a5244;color:#d8d4cc;font-size:12px}
   #settings.on{display:block}
+  #gearBtn{position:fixed;right:14px;bottom:14px;width:48px;height:48px;border-radius:50%;border:1px solid #5a5244;background:#0d0c11f2;z-index:12;display:none;align-items:center;justify-content:center;cursor:pointer;padding:0}
+  #gearBtn.show{display:flex}
+  #gearBtn svg{width:26px;height:26px;fill:none;stroke:#d8d4cc;stroke-width:1.6;stroke-linecap:round;transition:transform .3s}
+  #gearBtn.on{border-color:#ffe0a0}#gearBtn.on svg{stroke:#ffe0a0;transform:rotate(60deg)}
+  #fsGate{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#050818e8;color:#f0e6d0;text-align:center;cursor:pointer;padding:16px}
+  #fsGate.on{display:flex}
+  #fsGate b{font-size:20px;letter-spacing:2px}#fsGate span{font-size:13px;color:#9fb4c4}
   #settings h4{margin:0 0 8px;font-size:11px;letter-spacing:4px;color:#b8a888}
   #settings label{display:block;margin:6px 0}
   #settings label.row{display:flex;justify-content:space-between;align-items:center}
@@ -220,6 +231,8 @@
 <div id="credits" title="기계 부품">⚙ 0</div>
 <div id="pack"></div>
 <div id="settings"></div>
+<button id="gearBtn" aria-label="설정"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/><circle cx="12" cy="12" r="6.6"/></svg></button>
+<div id="fsGate"><b>화면을 눌러 전체화면으로 돌아가기</b><span>전체화면에서만 플레이할 수 있어요</span></div>
 <div id="shop"></div>
 <button id="callBtn"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg><span>박사 호출<small>C</small></span></button>
 <div id="rg"><i id="rgf"></i></div>

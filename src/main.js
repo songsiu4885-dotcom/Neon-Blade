@@ -134,7 +134,7 @@ const zones = new Zones(combat, env, zoneDefs, {
   onStart(i) {
     shop.setAvailable(false);
     zoneCredits = inv.credits; zoneKills = inv.kills;
-    banner(zoneDefs[i].boss ? 'BOSS · 관리자 크로노스' : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
+    banner(zoneDefs[i].boss ? 'BOSS · 관리자 아담' : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
     if (!zoneDefs[i].boss) story.say(STORY.zoneStart[i]);
   },
   onWave(i, k) { if (k > 1) { pop('증원', '#ff8a7a'); audio.warn(); } },
@@ -281,7 +281,7 @@ async function newGame(withIntro = true) {
   rig.target.set(player.pos.x, 1.4, player.pos.z);
   buildPips();
   started = true;
-  if (withIntro) await story.play(STORY.intro);
+  if (withIntro) await story.play(STORY.intro, { black: true });
   zones.enabled = true;
   banner('네온 블레이드', 2000);
 }
@@ -357,9 +357,39 @@ addEventListener('keydown', (e) => {
 
 // ---- 타이틀 ----
 try { const b = localStorage.getItem('nb_best'); if (b) $('bestRank').textContent = `최고 등급 ${b}`; } catch {}
-$('goBtn').addEventListener('click', () => {
+// ---- 전체화면 고정: 시작할 때 전체화면으로 들어가고, 플레이 중 풀리면 게임을 멈추고 다시 들어가게 한다 ----
+const root = document.documentElement;
+const fsSupported = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const fsGate = $('fsGate');
+async function enterFullscreen() {
+  if (!fsSupported || isFull()) return;
+  try {
+    await (root.requestFullscreen ? root.requestFullscreen({ navigationUI: 'hide' }) : root.webkitRequestFullscreen());
+    await screen.orientation?.lock?.('landscape').catch(() => {});
+  } catch {}
+}
+const onFsChange = () => {
+  // 전체화면 요청이 거절되는 환경(일부 브라우저/앱)에서는 안내를 띄우지 않는다
+  fsGate.classList.toggle('on', started && fsSupported && fsWanted && !isFull());
+};
+let fsWanted = false;
+document.addEventListener('fullscreenchange', onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);
+const backToFull = async (e) => {
+  e.preventDefault(); e.stopPropagation();
+  await enterFullscreen();
+  if (!isFull()) { fsWanted = false; fsGate.classList.remove('on'); } // 들어가지지 않으면 강제하지 않는다
+  if (!input.isTouch) canvas.requestPointerLock?.();
+};
+fsGate.addEventListener('click', backToFull);
+fsGate.addEventListener('touchend', backToFull, { passive: false });
+
+$('goBtn').addEventListener('click', async () => {
   audio.unlock(); audio.select();
   titleEl.style.display = 'none';
+  await enterFullscreen();
+  fsWanted = isFull();
   if (!input.isTouch) canvas.requestPointerLock?.();
   newGame(true);
 });
@@ -379,7 +409,7 @@ const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
   // 타이틀/막(cinematic) 중에는 시뮬레이션을 멈추고 풍경만 살아 움직인다
-  const paused = story.blocking || shop.open || pack.isOpen;
+  const paused = story.blocking || shop.open || pack.isOpen || fsGate.classList.contains('on');
   document.body.classList.toggle('paused', paused);
   if (!started || paused) {
     input.poll();
@@ -416,7 +446,8 @@ function frame() {
   // 붉은 방벽에 막혔을 때 안내
   gateHintCd -= dt;
   const gate = env.curGate();
-  if (gate && !player.dead && player.pos.z < gate.z + 2.2 && gateHintCd <= 0 && zones.state !== 'travel') {
+  const rear = env.rear, nearRear = rear && !rear.open && player.pos.z > rear.z - 1.2;
+  if (!player.dead && gateHintCd <= 0 && zones.state !== 'travel' && ((gate && player.pos.z < gate.z + 2.2) || nearRear)) {
     gateHintCd = 3.5; pop('방벽 봉쇄 · 적을 모두 처치하라', '#ff6b5a'); audio.bump();
   }
 
