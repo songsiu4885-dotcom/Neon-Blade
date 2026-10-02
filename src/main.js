@@ -10,7 +10,7 @@ import { Zones } from './waves.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
 import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
-import { STORY, ZONE_NAMES, ZONE_BONUS, StoryUI } from './story.js';
+import { STORY, ZONE_NAMES, ZONE_BONUS, ZONE_BOSS, StoryUI } from './story.js';
 import { DoctorShop, Backpack, SETTINGS_DEFAULT } from './shop.js';
 
 const canvas = document.getElementById('game');
@@ -110,18 +110,32 @@ function applySkin(i = 0) {
 applySkin(0);
 loadHero().then((g) => { player.useHero(buildHero(g), HeroAnimator); }).catch((e) => console.warn('hero model', e));
 
-// ---- 구역 정의 ----
-const TRIGGER_Z = [-20, -72, -196, -266, -346, -480, -576, -676, -766, -886];
-const zoneDefs = ZONE_NAMES.map((name, i) => ({
-  name, triggerZ: TRIGGER_Z[i],
-  gate: i < GATE_Z.length ? i : null,
-  respawn: i === 0 ? env.start.clone() : new THREE.Vector3(0, 0, GATE_Z[i - 1] - 4),
-  beacon: new THREE.Vector3(0, 0, TRIGGER_Z[i] - 24),
-  boss: i === ZONE_NAMES.length - 1,
-}));
-const lastZone = zoneDefs[zoneDefs.length - 1];
-lastZone.bossAt = new THREE.Vector3(0, 0, -952);
-lastZone.pre = () => story.play(STORY.bossIntro);
+// ---- 구역 정의: 거리 13구역 + 타워 5개 층 ----
+const STREET_TRIG = [-20, -72, -132, -196, -266, -346, -412, -480, -576, -676, -766, -822, -886];
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const zoneDefs = ZONE_NAMES.map((name, i) => {
+  const bossKey = ZONE_BOSS[i];
+  if (i < STREET_TRIG.length) {
+    return {
+      name, bossKey, triggerZ: STREET_TRIG[i],
+      gate: i < GATE_Z.length ? i : null,
+      respawn: i === 0 ? env.start.clone() : V(0, 0, GATE_Z[i - 1] - 4),
+      beacon: V(0, 0, STREET_TRIG[i] - 24),
+    };
+  }
+  // 타워 층: 앞 구역의 발판(첫 층은 거리 끝 타워 입구)을 밟으면 이 층 시작점으로 올라온다
+  const k = i - STREET_TRIG.length, room = env.rooms[k];
+  return {
+    name, bossKey, room: k, gate: null,
+    triggerZ: room.start.z - 3,
+    respawn: room.start.clone(), beacon: room.center.clone(),
+    entry: { pad: k === 0 ? env.towerDoor.clone() : env.rooms[k - 1].lift.clone(), padIndex: k, dest: room.start.clone() },
+    entered: false, xRange: [room.x0, room.x1],
+  };
+});
+zoneDefs[12].bossAt = V(0, 0, -952);
+zoneDefs[17].bossAt = V(env.rooms[4].center.x, 0, env.rooms[4].center.z - 12);
+for (const z of zoneDefs) if (z.bossKey && STORY.pre[z.bossKey]) z.pre = () => story.play(STORY.pre[z.bossKey]);
 
 const bannerEl = $('banner');
 function banner(text, ms = 2200) {
@@ -134,8 +148,9 @@ const zones = new Zones(combat, env, zoneDefs, {
   onStart(i) {
     shop.setAvailable(false);
     zoneCredits = inv.credits; zoneKills = inv.kills;
-    banner(zoneDefs[i].boss ? 'BOSS · 관리자 아담' : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
-    if (!zoneDefs[i].boss) story.say(STORY.zoneStart[i]);
+    const bossName = { jugg: '파쇄기 골리앗', twin: '쌍둥이 집행자', warden: '감시자 아르고스', gate: '타워 수문장 헤카톤', mirror: '복제체 ZERO-01', adam: '관리자 아담' }[zoneDefs[i].bossKey];
+    banner(bossName ? `${zoneDefs[i].bossKey === 'adam' ? 'FINAL BOSS' : 'BOSS'} · ${bossName}` : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
+    if (STORY.zoneStart[i]?.length) story.say(STORY.zoneStart[i]);
   },
   onWave(i, k) { if (k > 1) { pop('증원', '#ff8a7a'); audio.warn(); } },
   async onClear(i) {
@@ -146,10 +161,12 @@ const zones = new Zones(combat, env, zoneDefs, {
       inv.credits += ZONE_BONUS;
       toast(`구역 정리 · 기계 부품 +${ZONE_BONUS}<small>방벽 해제 · 박사 호출 가능</small>`, 2600);
     }
-    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.15); // 구역 클리어 회복은 조금만
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * (zoneDefs[i].bossKey ? 0.3 : 0.1)); // 구역 클리어 회복은 조금만 (보스를 잡으면 조금 더)
+    const next = zoneDefs[i + 1];
+    if (next?.entry) env.showPad(next.entry.padIndex, true); // 다음 층으로 가는 발판을 켠다
     const c = STORY.zoneClear[i];
     if (c === 'reveal') { await story.play(STORY.reveal); story.say([{ w: 'doc', t: '방벽은 열렸네. 부품이 있으면 나를 부르게.' }]); }
-    else if (c) story.say(c);
+    else if (c?.length) story.say(c);
     if (i < zoneDefs.length - 1) shop.setAvailable(true);
   },
   async onAllClear() {
@@ -194,7 +211,10 @@ function showClear() {
 // ---- 전투 이벤트 ----
 combat.onPop = (text, color) => {
   if (text === 'EXECUTION') execs++;
-  if (text.startsWith('PHASE')) story.say(STORY.bossPhase[+text.split(' ')[1]] || []);
+  if (text.startsWith('PHASE')) {
+    const n = +text.split(' ')[1], b = combat.enemies.find((e) => e.boss && e.alive && e.phase === n);
+    story.say(STORY.phase[b?.key]?.[n] || []);
+  }
   pop(text, color);
 };
 combat.onKill = (e) => {
@@ -222,7 +242,6 @@ player.onPerfectDodge = (src) => {
   slowEl.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 700 });
   rig.shake(0.02);
   player.addRage(player.mods.dodgeRage);
-  if (src.alive) combat.target = src; // 회피한 상대에게 락온
   if (src.boss && src.alive && !src.invulnerable) { // 보스에게는 큰 피해
     if (src.addPosture(60)) combat._broken(src);
     src.hp = Math.max(1, src.hp - 45);
@@ -259,10 +278,31 @@ function resetCombatState() {
   story.clearComm();
   slowT = 0;
 }
+// ---- 타워: 발판을 밟으면 화면이 어두워졌다가 다음 층 시작점에서 밝아진다 ----
+const fadeEl = $('fade');
+let transit = false;
+const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+async function enterFloor(z) {
+  transit = true;
+  fadeEl.classList.add('on');
+  await wait(380);
+  env.showPad(z.entry.padIndex, false);
+  player.pos.copy(z.entry.dest); player.vel.set(0, 0, 0);
+  player.facing = 0; player.yawBase = 0; player.model.rotation.y = 0;
+  rig.yaw = 0; rig.target.set(player.pos.x, 1.4, player.pos.z);
+  z.entered = true;
+  if (z.room === 0) await story.play(STORY.towerEnter, { black: true });
+  fadeEl.classList.remove('on');
+  banner(z.name, 2200);
+  await wait(300);
+  transit = false;
+}
+
 function retryZone() { // 사망 후: 이번 구역을 처음부터, 산 칩은 유지하고 이번 구역에서 얻은 부품은 되돌린다
   resetCombatState();
   inv.credits = zoneCredits; inv.kills = zoneKills;
   zones.restartZone();
+  if (zones.zone?.entry) zones.zone.entered = true; // 타워 층에서 쓰러지면 그 층 시작점에서 다시
   player.reset(zones.respawn);
   rig.target.set(player.pos.x, 1.4, player.pos.z);
   player.hp = player.maxHp;
@@ -277,6 +317,7 @@ async function newGame(withIntro = true) {
   player.mods = defaultMods(); player.maxHp = 100; player.maxStamina = 3;
   document.body.classList.remove('od');
   zones.reset();
+  for (const z of zoneDefs) if (z.entry) { z.entered = false; env.showPad(z.entry.padIndex, false); }
   player.reset(env.start);
   rig.target.set(player.pos.x, 1.4, player.pos.z);
   buildPips();
@@ -409,7 +450,7 @@ const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
   // 타이틀/막(cinematic) 중에는 시뮬레이션을 멈추고 풍경만 살아 움직인다
-  const paused = story.blocking || shop.open || pack.isOpen || fsGate.classList.contains('on');
+  const paused = transit || story.blocking || shop.open || pack.isOpen || fsGate.classList.contains('on');
   document.body.classList.toggle('paused', paused);
   if (!started || paused) {
     input.poll();
@@ -431,11 +472,14 @@ function frame() {
 
   const inp = input.poll();
   rig.applyLook(dt, inp, input.isTouch);
-  combat.updateTarget(player, rig);
-  rig.assist(dt, player, settings.lockCam ? combat.target : null);
   player.update(simDt, inp, rig, combat);
   combat.update(eDt, player);
   zones.update(simDt, player);
+  const zc = zones.zone;
+  if (zones.enabled && zones.state === 'travel' && zc?.entry && !zc.entered && !player.dead) {
+    const pd = zc.entry.pad;
+    if (Math.hypot(player.pos.x - pd.x, player.pos.z - pd.z) < 1.8) enterFloor(zc);
+  }
   story.update(dt);
   creditsEl.textContent = `⚙ ${inv.credits}`;
   // 박사 호출은 전투가 없을 때만 (구역 정리 후 다음 전투 전까지)

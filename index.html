@@ -123,6 +123,8 @@
   #cine.black.reveal{background:#0000}
   #cine .hint{position:absolute;right:20px;bottom:15%;font-size:11px;letter-spacing:2px;color:#9fb4c4;opacity:.7}
   body.cine #hud,body.cine #hp,body.cine #rg,body.cine #stage,body.cine #obj,body.cine #boss,body.cine #combo,body.cine #bars,body.cine #dashBtn,body.cine #atkBtn,body.cine #help,body.cine #lzone,body.cine #rzone,body.cine #stick,body.cine #packBtn,body.cine #credits,body.cine #callBtn{opacity:0 !important;pointer-events:none}
+  #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:14}
+  #fade.on{opacity:1}
   #toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);padding:10px 22px;background:#0b0f2ae6;border:1px solid #ffd54a;color:#ffe9a8;font-weight:700;letter-spacing:2px;opacity:0;pointer-events:none;text-align:center;z-index:6}
   /* ---- 배낭 / 상점 / 설정 ---- */
   #packBtn{position:fixed;right:14px;top:12px;width:44px;height:44px;border-radius:10px;border:1px solid #c8b89a88;background:#0d0c10cc;z-index:12;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
@@ -227,6 +229,7 @@
 <div id="comm"></div>
 <div id="cine"><div class="bar t"></div><div class="bar b"></div><div class="cl"></div><div class="hint">클릭 · Enter 로 넘기기</div></div>
 <div id="toast"></div>
+<div id="fade"></div>
 <button id="packBtn" aria-label="배낭"><svg viewBox="0 0 24 24"><path d="M8 6V4.5a1.5 1.5 0 0 1 1.5-1.5h5A1.5 1.5 0 0 1 16 4.5V6"/><path d="M5 10a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 14h8v4H8z"/><path d="M5 12h3M16 12h3"/></svg></button>
 <div id="credits" title="기계 부품">⚙ 0</div>
 <div id="pack"></div>

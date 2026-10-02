@@ -2,11 +2,18 @@ import { Thug } from './enemies/thug.js';
 import { Drone } from './enemies/drone.js';
 import { ShieldBot, Sniper, Mech, Executioner, Sentinel } from './enemies/more.js';
 import { Boss } from './enemies/boss.js';
+import { Assassin, Bomber, Gunner } from './enemies/extra.js';
+import { Juggernaut, TwinExec, Warden, Mirror, Adam } from './enemies/bosses.js';
 import { ZONE_WAVES, BOUNTY } from './story.js';
 
-const REG = { thug: Thug, drone: Drone, shield: ShieldBot, sniper: Sniper, mech: Mech, exec: Executioner, sentinel: Sentinel, boss: Boss };
-const MIN_DIST = { sniper: 20, sentinel: 14, default: 11 };
-const MAX_ALIVE = 15; // 동시에 존재하는 적의 수 상한 (성능과 가독성)
+const REG = {
+  thug: Thug, drone: Drone, shield: ShieldBot, sniper: Sniper, mech: Mech, exec: Executioner, sentinel: Sentinel,
+  assassin: Assassin, bomber: Bomber, gunner: Gunner,
+  jugg: Juggernaut, twin: TwinExec, warden: Warden, mirror: Mirror, gate: Boss, adam: Adam,
+};
+const FIXED = new Set(['gate', 'adam']); // 정해진 자리(bossAt)에 나타나는 보스
+const MIN_DIST = { sniper: 20, sentinel: 14, gunner: 14, warden: 14, default: 11 };
+const MAX_ALIVE = 16; // 동시에 존재하는 적의 수 상한 (성능과 가독성)
 
 // 구역 진행: 구역 시작선을 넘으면 하위 웨이브가 차례로 투입되고, 모두 처치하면 붉은 방벽이 열린다.
 export class Zones {
@@ -19,7 +26,7 @@ export class Zones {
     this.total = zones.length;
     this.members = [];
     this.reset();
-    combat.ctx.spawn = (Cls, x, z) => this._add(new Cls(x, z), 'minion'); // 보스가 졸개를 부를 때 (보상은 적게)
+    combat.ctx.spawn = (type, x, z) => this._add(new REG[type](x, z), 'minion'); // 보스가 졸개를 부를 때 (보상은 적게)
   }
 
   reset() {
@@ -34,7 +41,7 @@ export class Zones {
     this.enabled = false;
     this.world.setGates(0);
     this.world.clearRear();
-    this.combat.ctx.maxAtk = 4;
+    this.combat.ctx.maxAtk = 5;
   }
 
   // 현재 구역을 처음부터 다시 (사망 후 체크포인트)
@@ -52,13 +59,22 @@ export class Zones {
   get done() { return this.i; }
   get respawn() { return this.zones[Math.min(this.i, this.total - 1)].respawn; }
   // 이동 중에는 다음 구역 시작선 방향을 안내한다
-  get objective() { return this.enabled && this.state === 'travel' && !this.cleared ? this.zone.beacon : null; }
+  get objective() {
+    if (!this.enabled || this.state !== 'travel' || this.cleared) return null;
+    const z = this.zone;
+    return z.entry && !z.entered ? z.entry.pad : z.beacon; // 다음 층으로 가는 발판이 있으면 발판으로 안내
+  }
   get progress() {
     const z = this.zone, w = ZONE_WAVES[this.i];
     return { wave: Math.min(this.k, w.length), waves: w.length };
   }
 
-  _add(e, type) { e.bounty = BOUNTY[type] ?? 0; this.members.push(e); this.combat.add(e); return e; }
+  // 깊은 구역일수록 적이 단단하다 (보스는 자체 체력 그대로)
+  _add(e, type) {
+    e.bounty = BOUNTY[type] ?? 0;
+    if (!e.boss) { e.maxHp = Math.round(e.maxHp * (1 + 0.035 * this.i)); e.hp = e.maxHp; }
+    this.members.push(e); this.combat.add(e); return e;
+  }
 
   _spawnWave(player) {
     const wave = ZONE_WAVES[this.i][this.k++];
@@ -68,9 +84,9 @@ export class Zones {
     for (const [type, count] of Object.entries(wave)) {
       const Cls = REG[type];
       for (let n = 0; n < count; n++) {
-        if (type === 'boss') { this._add(new Cls(this.zone.bossAt.x, this.zone.bossAt.z), type); continue; }
+        if (FIXED.has(type)) { this._add(new Cls(this.zone.bossAt.x, this.zone.bossAt.z), type); continue; }
         const md = MIN_DIST[type] || MIN_DIST.default;
-        const p = this.world.spawnInZone(zMin, zMax, player.pos, md, md + 28);
+        const p = this.world.spawnInZone(zMin, zMax, player.pos, md, md + 28, this.zone.xRange);
         this._add(new Cls(p.x, p.z), type);
       }
     }
@@ -79,9 +95,10 @@ export class Zones {
 
   async _begin(player) {
     this.state = 'cine';                         // 중복 시작 방지
-    this.world.raiseRear(this.zone.triggerZ + 5); // 적과 마주친 순간 뒤쪽도 막힌다
+    this.world.raiseRear(this.zone.triggerZ + (this.zone.room != null ? 4.5 : 5), this.zone.room != null); // 적과 마주친 순간 뒤쪽도 막힌다
     await this.zone.pre?.();                     // 막 (보스 등장 등)
-    this.combat.ctx.maxAtk = Math.min(6, 4 + Math.floor(this.i / 3));
+    this.combat.ctx.maxAtk = Math.min(8, 5 + Math.floor(this.i / 5));
+    player.dmgScale = 1.35 + 0.03 * this.i; // 깊은 구역일수록 아프다
     this.hooks.onStart?.(this.i);
     this._spawnWave(player);
     this.state = 'fight';
@@ -93,7 +110,7 @@ export class Zones {
     this.members = this.members.filter((e) => !e.dead);
     const z = this.zone;
     if (this.state === 'travel') {
-      if (player.pos.z <= z.triggerZ) this._begin(player);
+      if ((!z.entry || z.entered) && player.pos.z <= z.triggerZ) this._begin(player); // 타워 층은 발판으로 들어간 뒤에만
     } else if (this.state === 'fight') {
       this.timer -= dt;
       const waves = ZONE_WAVES[this.i];

@@ -3,7 +3,7 @@ import { audio } from '../audio.js';
 
 // 탄환 풀. 플레이어에게 닿으면 피해, 패링하면 발사자 쪽으로 되돌아가 적을 때린다.
 export class Projectiles {
-  constructor(scene, fx, n = 16) {
+  constructor(scene, fx, n = 48) {
     this.fx = fx;
     const geo = new THREE.SphereGeometry(0.28, 8, 6);
     const haloGeo = new THREE.SphereGeometry(0.5, 8, 6);

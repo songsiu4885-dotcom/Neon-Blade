@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { Enemy, warnMaterial } from './enemy.js';
 import { buildGuardRobot, GuardAnimator } from '../characters/robots.js';
-import { Thug } from './thug.js';
-import { Drone } from './drone.js';
 import { audio } from '../audio.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -10,23 +8,32 @@ const fwd = (e) => V3(-Math.sin(e.facing), 0, -Math.cos(e.facing));
 const rand = (a, b) => a + Math.random() * (b - a);
 const circle = (r) => { const m = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), warnMaterial()); m.scale.set(r, 1, r); m.position.y = 0.07; m.visible = false; return m; };
 
-// 관리자 〈아담〉: 3단계 보스.
+// 3단계 보스의 기본형. 옵션으로 이름·체력·색·크기·쓰는 기술·부르는 졸개를 바꿔 여러 보스로 쓴다.
+// 기본값은 〈타워 수문장〉.
 //  1단계: 내려찍기(앞쪽 원), 회전 베기(자신 중심 원)
 //  2단계(HP 66%): 돌진 추가, 졸개 호출
 //  3단계(HP 33%): 전방위 탄막 추가, 공격 가속, 졸개 호출
 // 모든 공격은 바닥에 붉은 범위를 먼저 그린다. 범위가 번쩍이는 순간을 노려 대시로 빠지면 완벽 회피.
+const GATEKEEPER = {
+  key: 'gate', name: '타워 수문장 헤카톤', hp: 1500, posture: 340, exec: 260, radius: 1.7, scale: 2.1, speed: 1,
+  look: { shell: 0x2a2038, rim: 0xff2bd6, vent: 0x00e5ff, weapon: 'maul' },
+  moves: { rush: 2, barrage: 3 },     // 몇 단계부터 쓰는지
+  summons: { 2: ['thug', 'thug', 'thug', 'thug', 'drone', 'drone'], 3: ['drone', 'drone', 'drone', 'drone', 'thug', 'thug', 'thug', 'thug'] },
+};
 export class Boss extends Enemy {
-  constructor(x, z) {
-    super({ maxHp: 1000, radius: 1.7, maxPosture: 300 });
-    this.boss = true; this.elite = true;
+  constructor(x, z, opts = {}) {
+    const o = { ...GATEKEEPER, ...opts };
+    super({ maxHp: o.hp, radius: o.radius, maxPosture: o.posture });
+    this.o = o;
+    this.boss = true; this.elite = true; this.key = o.key;
     this.pos.set(x, 0, z);
-    this.executionDamage = 240;      // 자세가 무너졌을 때 처형 한 방의 피해
-    this.name = '관리자 아담';
+    this.executionDamage = o.exec;      // 자세가 무너졌을 때 처형 한 방의 피해
+    this.name = o.name;
     this.phase = 1;
     this.state = 'intro'; this.t = 0; this.cd = 1.5;
-    this.J = buildGuardRobot(this, { shell: 0x2a2038, rim: 0xff2bd6, vent: 0x00e5ff, weapon: 'maul' });
+    this.J = buildGuardRobot(this, o.look);
     this.anim = new GuardAnimator(this.J);
-    this.body.scale.setScalar(2.1);
+    this.body.scale.setScalar(o.scale);
     this.armRx = 0.25;
     this.slamWarn = circle(5); this.group.add(this.slamWarn); this.slamWarn.position.set(0, 0.07, -4.2);
     this.sweepWarn = circle(7); this.group.add(this.sweepWarn);
@@ -54,8 +61,8 @@ export class Boss extends Enemy {
     const opts = [];
     if (dist < 11) opts.push('slam', 'slam');
     if (dist < 8) opts.push('sweep', 'sweep');
-    if (this.phase >= 2 && dist > 7) opts.push('rush', 'rush');
-    if (this.phase >= 3) opts.push('barrage');
+    if (this.phase >= (this.o.moves.rush ?? 9) && dist > 7) opts.push('rush', 'rush');
+    if (this.phase >= (this.o.moves.barrage ?? 9)) opts.push('barrage');
     if (!opts.length) opts.push('slam');
     return opts[Math.floor(Math.random() * opts.length)];
   }
@@ -68,7 +75,7 @@ export class Boss extends Enemy {
   }
 
   ai(dt, ctx) {
-    const sp = this.phase === 3 ? 1.35 : this.phase === 2 ? 1.15 : 1; // 단계별 가속
+    const sp = (this.phase === 3 ? 1.35 : this.phase === 2 ? 1.15 : 1) * this.o.speed; // 단계별 가속
     const p = ctx.player.pos, dx = p.x - this.pos.x, dz = p.z - this.pos.z, dist = Math.hypot(dx, dz) || 1e-6;
 
     // 단계 전환
@@ -80,8 +87,8 @@ export class Boss extends Enemy {
       ctx.combat.onPop?.(`PHASE ${this.phase}`, '#ff8cf0'); audio.roar();
       ctx.rig.shake(0.1); ctx.fx.flash(0.2);
       if (ctx.spawn) { // 졸개 호출
-        const n = this.phase === 2 ? [Thug, Thug, Thug, Thug, Drone, Drone] : [Drone, Drone, Drone, Drone, Thug, Thug, Thug, Thug];
-        n.forEach((C, i) => { const a = (i / n.length) * Math.PI * 2 + Math.random(); ctx.spawn(C, this.pos.x + Math.cos(a) * 13, this.pos.z + Math.sin(a) * 13); });
+        const n = this.o.summons[this.phase] || [];
+        n.forEach((type, i) => { const a = (i / n.length) * Math.PI * 2 + Math.random(); ctx.spawn(type, this.pos.x + Math.cos(a) * 13, this.pos.z + Math.sin(a) * 13); });
       }
     }
 

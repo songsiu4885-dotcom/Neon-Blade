@@ -15,24 +15,13 @@ export class Combat {
     this.ctx = { scene, fx, rig, combat: this, player: null, projectiles: this.projectiles, enemies: this.enemies, spawn: null,
       get world() { return this.combat.world; },
       maxAtk: 3, attackers: () => this.enemies.filter((e) => e.attacking && !e.boss).length };
-    this.target = null;
     this.hitstop = 0;
     this.hits = 0;
     this.hitTimer = 0;
     this._v = new THREE.Vector3();
 
-    // 락온 마커
-    this.marker = new THREE.Group();
-    const mat = new THREE.MeshBasicMaterial({ color: 0x7ff6ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.markerMat = mat;
-    this.marker.add(new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.03, 4, 32).rotateX(Math.PI / 2), mat));
-    this.diamond = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), mat);
-    this.diamond.position.y = 2.7;
     this.onPop = null;
     this.onKill = null;
-    this.marker.add(this.diamond);
-    this.marker.visible = false;
-    scene.add(this.marker);
   }
 
   add(enemy) {
@@ -40,31 +29,18 @@ export class Combat {
     this.scene.add(enemy.group);
   }
 
-  // 자동 락온: 카메라가 보는 쪽(화면 가운데)에 가깝고 거리가 가까운 적을 잡는다.
-  // 아주 가까운 적(3m)은 방향과 상관없이 후보. 한 번 잡은 대상은 쉽게 바뀌지 않고, 공격 중에는 유지한다.
-  updateTarget(player, rig) {
-    const f = rig ? rig.forward() : this._v.set(-Math.sin(player.facing), 0, -Math.cos(player.facing));
-    const info = (e) => {
-      const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z;
-      const d = Math.hypot(dx, dz) || 1e-6;
-      const ang = Math.acos(THREE.MathUtils.clamp((dx * f.x + dz * f.z) / d, -1, 1));
-      return { d, ang, score: d / 12 + ang * 1.3 - (e.broken ? 0.6 : 0) - (e.boss ? 0.3 : 0) };
-    };
-    const cur = this.target;
-    const curOk = cur && cur.alive && !cur.dead;
-    if (curOk && player.atk) return; // 공격 중에는 대상을 바꾸지 않는다
-    let best = null, bs = Infinity;
+  // 가벼운 조준 보정: 행동하는 순간에만, dir 기준 deg° 안·range m 안에서 가장 가까운 적. 화면에 표시하지 않는다.
+  assist(player, dir, range, deg) {
+    const cos = Math.cos(THREE.MathUtils.degToRad(deg));
+    let best = null, bd = range;
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      const k = info(e);
-      if (k.d > 14 || (k.ang > THREE.MathUtils.degToRad(75) && k.d > 3)) continue;
-      if (k.score < bs) { bs = k.score; best = e; }
+      const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z, d = Math.hypot(dx, dz);
+      if (d >= bd || d < 0.3) continue;
+      if ((dx * dir.x + dz * dir.z) / d < cos) continue;
+      bd = d; best = e;
     }
-    if (curOk) {
-      const k = info(cur);
-      if (k.d < 16 && (k.ang < THREE.MathUtils.degToRad(100) || k.d < 3) && k.score <= bs + 0.45) best = cur;
-    }
-    this.target = best;
+    return best;
   }
 
   // 플레이어가 적을 뚫고 지나가지 않도록 밀어낸다.
@@ -234,21 +210,11 @@ export class Combat {
         this.scene.remove(e.group);
         if (e.aim) this.scene.remove(e.aim);
         this.enemies.splice(i, 1);
-        if (this.target === e) this.target = null;
       }
     }
     if (this.hitTimer > 0) {
       this.hitTimer -= dt;
       if (this.hitTimer <= 0) this.hits = 0;
-    }
-    const t = this.target;
-    this.marker.visible = !!(t && t.alive);
-    if (this.marker.visible) {
-      this.marker.position.set(t.pos.x, 0.06, t.pos.z);
-      const s = 1 + Math.sin(performance.now() * 0.008) * 0.06;
-      this.markerMat.color.setHex(t.broken ? 0xffc400 : 0x7ff6ff);
-      this.marker.scale.set(s, 1, s);
-      this.diamond.rotation.y += dt * 3;
     }
   }
 }

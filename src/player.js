@@ -72,7 +72,6 @@ export class Player {
     this.onDashStart = null;
     this.onDashEnd = null;
     this.dashHits = new Set();
-    this.dashTarget = null;
     this.sinceDash = 99;
     this.atk = null;
     this.atkDir = new THREE.Vector3(0, 0, -1);
@@ -180,13 +179,11 @@ export class Player {
 
   _startAttack(kind, wish, combat) {
     const def = kind === 'dashSlash' ? DASH_SLASH : kind === 'heavy' ? HEAVY : COMBO[this.comboIdx];
-    // 조준 보정: 기본은 이동 입력(없으면 바라보는 방향). 락온 대상이 가깝고(6m) 그 방향에서 70° 안일 때만 대상 쪽으로 돌린다.
+    // 약한 조준 보정: 가려는 방향 35° 안, 4.5m 안의 가장 가까운 적에게만 살짝 맞춘다
     let dir = kind === 'dashSlash' ? this.dashDir.clone() : wish.lengthSq() > 0.01 ? wish.clone().normalize() : this._facingDir();
-    const tg = combat?.target;
-    if (tg && tg.alive && this._distTo(tg) < 6) {
-      const to = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
-      if (to.dot(dir) > Math.cos(THREE.MathUtils.degToRad(70))) dir = to;
-    }
+    const tg = combat?.assist(this, dir, 4.5, 35);
+    this.atkTarget = tg;
+    if (tg) dir = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
     this.atkDir.copy(dir);
     this.facing = Math.atan2(-dir.x, -dir.z);
     this.atk = { def, kind, t: 0, hit: new Set(), dmgMul: kind === 'heavy' ? 1 + this.charge * 1.2 : 1 };
@@ -215,7 +212,7 @@ export class Player {
       }
       return false;
     }
-    dmg *= this.mods.dmgTaken * 1.35; // 적은 늘린 수만큼 아프다
+    dmg *= this.mods.dmgTaken * (this.dmgScale ?? 1.35); // 깊은 구역일수록 아프다 (구역 진행이 정한다)
     this.hp = Math.max(0, this.hp - dmg);
     this.invuln = 0.5;
     this.stagger = 0.3;
@@ -274,17 +271,9 @@ export class Player {
         dir = cam.forward();
       }
       dir.y = 0; dir.normalize();
-      // 적 쪽으로 대시하면 자동 보정
-      this.dashTarget = null;
-      const tg = combat?.target;
-      if (tg) {
-        const to = new THREE.Vector3(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z);
-        const d = to.length();
-        if (d > 1 && d < 12 && to.normalize().dot(dir) > Math.cos(THREE.MathUtils.degToRad(35))) {
-          dir.copy(to);
-          this.dashTarget = tg;
-        }
-      }
+      // 대시 보정: 대시 방향 20° 안, 8m 안의 적이면 그쪽으로 살짝 꺾는다
+      const tg = combat?.assist(this, dir, 8, 20);
+      if (tg) dir.set(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
       this.dashDir.copy(dir);
       this.dashing = true;
       this.dashTimer = DASH_TIME;
@@ -381,7 +370,7 @@ export class Player {
 
     // 돌진: 대상에 거의 붙으면 멈춘다
     if (a.t < def.lungeT) {
-      const tg = combat?.target;
+      const tg = this.atkTarget;
       const stuck = tg && tg.alive && this._distTo(tg) < 1.5;
       this.vel.copy(this.atkDir).multiplyScalar(stuck ? 0 : def.lunge * (1 - 0.5 * (a.t / def.lungeT)));
     } else {

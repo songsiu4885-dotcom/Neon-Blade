@@ -17,7 +17,6 @@ export class CameraRig {
     this._tmp = new THREE.Vector3();
     this.sens = 1;
     this.shakeMul = 1;
-    this.idleLook = 9; // 시점 입력이 없었던 시간
   }
 
   forward(out = new THREE.Vector3()) {
@@ -32,27 +31,12 @@ export class CameraRig {
 
   // 이동 계산 전에 호출: 시점 입력 반영 (이동 방향이 최신 yaw를 쓰도록)
   applyLook(dt, input, isTouch) {
-    this.idleLook = Math.abs(input.lookDX) + Math.abs(input.lookDY) > 0.5 ? 0 : this.idleLook + dt;
     this.yaw -= input.lookDX * 0.0025 * this.sens;
     this.pitch = THREE.MathUtils.clamp(this.pitch + input.lookDY * 0.002 * this.sens, 0.12, 0.9);
     // 터치: 자동 추적 - 옆으로 달리면 시점이 따라 돈다
     if (isTouch && input.move.y > 0.3 && Math.abs(input.lookDX) < 1) {
       this.yaw -= input.move.x * dt * 1.2;
     }
-  }
-
-  // 락온 카메라 보조: 직접 시점을 돌린 지 0.8초가 지났고, 대상이 화면 가운데에서 35° 넘게 벗어났을 때만
-  // 넘친 각도만큼 천천히 따라간다. 플레이어가 돌리면 즉시 멈춘다.
-  assist(dt, player, target) {
-    if (!target || !target.alive || this.idleLook < 0.8 || player.dead) return;
-    const dx = target.pos.x - player.pos.x, dz = target.pos.z - player.pos.z;
-    if (Math.hypot(dx, dz) < 2.5) return;
-    const want = Math.atan2(-dx, -dz);
-    const diff = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    const dead = THREE.MathUtils.degToRad(35);
-    if (Math.abs(diff) <= dead) return;
-    const excess = diff - Math.sign(diff) * dead;
-    this.yaw += excess * (1 - Math.exp(-2.2 * dt));
   }
 
   update(dt, player) {

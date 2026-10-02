@@ -15,7 +15,7 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m; };
 
 // 구역 사이의 붉은 자기장 위치 (z). 구역의 적을 모두 처치해야 열린다.
-export const GATE_Z = [-62, -186, -256, -336, -470, -566, -666, -756, -876];
+export const GATE_Z = [-62, -125, -186, -256, -336, -405, -470, -566, -666, -756, -815, -876];
 // 한 줄로 이어지는 주 경로(R0~R9) + 옆 골목/안뜰/골목 속 틈. h: 주변 건물 높이 범위. style: 외벽 종류 고정(0 주거 1 업무 2 산업)
 const MAIN_RECTS = [
   { x0: -4.5, x1: 4.5, z0: -67, z1: 8, h: [26, 60] },            // 0 새벽 골목
@@ -45,6 +45,17 @@ const BRANCHES = [
   { x0: 13, x1: 36, z0: -822, z1: -812, h: [40, 90] },
   { x0: -36, x1: -13, z0: -842, z1: -832, h: [40, 90] },
 ];
+// ---- 타워 내부: 거리에서 멀리 떨어진 곳(x=600)에 층마다 닫힌 방을 둔다. 엘리베이터 발판으로 순간이동한다 ----
+export const TOWER_X = 600;
+export const ROOMS = [
+  { name: '타워 1층 · 로비', z: -200, half: 22, theme: 0x00e5ff, kind: 'lobby' },
+  { name: '타워 2층 · 서버실', z: -360, half: 22, theme: 0x3dff9a, kind: 'server' },
+  { name: '타워 3층 · 연구실', z: -520, half: 24, theme: 0xff2bd6, kind: 'lab' },
+  { name: '타워 4층 · 전망 회랑', z: -680, half: 22, theme: 0xffb347, kind: 'gallery' },
+  { name: '최상층 · 시계실', z: -860, half: 30, theme: 0xff3b30, kind: 'clock' },
+];
+const ROOM_RECTS = ROOMS.map((m) => ({ x0: TOWER_X - m.half + 2, x1: TOWER_X + m.half - 2, z0: m.z - m.half + 2, z1: m.z + m.half - 2 }));
+
 const RECTS = [...MAIN_RECTS, ...BRANCHES];
 // 이동 판정용 영역: 옆 골목이 큰길과 딱 맞닿기만 하면 경계에 걸을 수 없는 틈이 생긴다.
 // 맞닿은 쪽으로 1.5m 겹치게 늘려 걸어서도 드나들 수 있게 한다 (건물 배치는 RECTS 그대로).
@@ -56,8 +67,9 @@ const WALK = [...MAIN_RECTS, ...BRANCHES.map((b) => {
     if (Math.abs(b.x1 - m.x0) < 0.01) w.x1 += 1.5;
   }
   return w;
-})];
+}), ...ROOM_RECTS];
 const MAIN = MAIN_RECTS.map((_, i) => i); // 전선/증기가 걸리는 주 경로
+
 
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function tex(c, repeat = false) {
@@ -775,9 +787,9 @@ export function buildStreet(scene) {
   })();
   const gateMats = [];
   // 방벽 하나: 그 z에서 걸을 수 있는 폭 전체를 막는다
-  const makeGate = (gz) => {
+  const makeGate = (gz, indoor = false) => {
     let mn = Infinity, mx = -Infinity;
-    for (const r of RECTS) if (gz > r.z0 && gz < r.z1) { mn = Math.min(mn, r.x0); mx = Math.max(mx, r.x1); }
+    for (const r of indoor ? ROOM_RECTS : RECTS) if (gz > r.z0 - 0.01 && gz < r.z1 + 0.01) { mn = Math.min(mn, r.x0); mx = Math.max(mx, r.x1); }
     const W = mx - mn, cx = (mn + mx) / 2, H = 12;
     const g = new THREE.Group();
     g.position.set(cx, 0, gz);
@@ -817,10 +829,114 @@ export function buildStreet(scene) {
     scene.add(g);
     return { z: gz, group: g, mat, W, open: false, openT: 0, closing: false, sign };
   };
-  const gates = GATE_Z.map(makeGate);
+  const gates = GATE_Z.map((gz) => makeGate(gz));
   // 뒤쪽 방벽: 적과 마주치면 플레이어 뒤에 솟아 도망칠 수 없게 하고, 구역을 정리하면 함께 열린다
   let rear = null;
   const dropRearNow = () => { if (rear) { scene.remove(rear.group); rear.mat.dispose(); rear = null; } };
+
+  // ---- 타워 입구와 층마다의 방 ----
+  const pads = []; // 0: 거리 끝 타워 입구, k + 1: k층 방의 엘리베이터
+  const labelTex = (text, color) => {
+    const [c, g] = canvas(512, 128);
+    g.font = 'bold 54px "Noto Sans KR","Malgun Gothic",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = color; g.shadowBlur = 20; g.fillStyle = '#fff'; g.fillText(text, 256, 66);
+    return tex(c);
+  };
+  const makePad = (x, z, color, label) => {
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    g.add(mesh(new THREE.CylinderGeometry(1.7, 1.8, 0.1, 40), new THREE.MeshStandardMaterial({ color: 0x20232c, roughness: 0.35, metalness: 0.8 }), 0, 0.05, 0));
+    const on = new THREE.Group(); g.add(on);
+    on.add(mesh(new THREE.TorusGeometry(1.55, 0.07, 8, 48).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: col(color, 2.4) }), 0, 0.12, 0));
+    const beam = mesh(new THREE.CylinderGeometry(1.45, 1.45, 10, 32, 1, true).translate(0, 5, 0),
+      new THREE.MeshBasicMaterial({ color: col(color, 0.9), transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    on.add(beam);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(label, hexStr(color)), transparent: true, depthWrite: false }));
+    sp.scale.set(5, 1.25, 1); sp.position.y = 4.2; on.add(sp);
+    on.visible = false;
+    scene.add(g);
+    const pad = { pos: V(x, 0, z), group: g, on, beam };
+    pads.push(pad);
+    return pad;
+  };
+  // 거리 끝 타워 입구 (광장 난간 앞)
+  {
+    const z = -979, frame = new THREE.MeshStandardMaterial({ color: 0x2a2c38, roughness: 0.4, metalness: 0.8 }), glowM = new THREE.MeshBasicMaterial({ color: col(0xff2bd6, 2.2) });
+    for (const sx of [-1, 1]) { scene.add(mesh(new THREE.BoxGeometry(1.2, 9, 1.2), frame, sx * 4, 4.5, z - 3)); scene.add(mesh(new THREE.BoxGeometry(0.14, 8, 0.14), glowM, sx * 3.3, 4, z - 2.4)); }
+    scene.add(mesh(new THREE.BoxGeometry(9.2, 1.2, 1.2), frame, 0, 9.2, z - 3));
+    scene.add(mesh(new THREE.BoxGeometry(7, 0.14, 0.14), glowM, 0, 8.5, z - 2.4));
+    makePad(0, z, 0xff2bd6, '타워 입구');
+  }
+  const tileTex = (theme) => {
+    const [c, g] = canvas(256, 256);
+    g.fillStyle = '#14161d'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.04})`; g.fillRect(i * 64 + 2, j * 64 + 2, 60, 60); }
+    g.strokeStyle = hexStr(theme); g.globalAlpha = 0.35; g.lineWidth = 2;
+    for (let i = 0; i <= 256; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 256); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); }
+    const t = tex(c, true); return t;
+  };
+  let clockHands = null;
+  const rooms = ROOMS.map((m, k) => {
+    const X = TOWER_X, Z = m.z, H = m.half, WH = 11;
+    const grp = new THREE.Group(); scene.add(grp);
+    const add = (geo, mat, x, y, z) => { const o = mesh(geo, mat, x, y, z); grp.add(o); return o; };
+    const t = tileTex(m.theme); t.repeat.set(H / 4, H / 4);
+    add(new THREE.PlaneGeometry(H * 2, H * 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: t, color: 0xb8bcc8, roughness: 0.32, metalness: 0.55 }), X, 0.01, Z);
+    const wallM = new THREE.MeshStandardMaterial({ color: 0x23262f, roughness: 0.55, metalness: 0.6 });
+    const neon = new THREE.MeshBasicMaterial({ color: col(m.theme, 2.0) });
+    const dim = new THREE.MeshBasicMaterial({ color: col(m.theme, 0.6) });
+    for (const [dx, dz, w, d] of [[0, -1, H * 2 + 2, 1], [0, 1, H * 2 + 2, 1], [-1, 0, 1, H * 2 + 2], [1, 0, 1, H * 2 + 2]]) {
+      add(new THREE.BoxGeometry(w, WH, d), wallM, X + dx * (H + 0.5), WH / 2, Z + dz * (H + 0.5));
+      for (const y of [0.3, 7.2]) add(new THREE.BoxGeometry(dx ? 0.1 : w - 2, 0.12, dz ? 0.1 : d - 2), y < 1 ? neon : dim, X + dx * H, y, Z + dz * H);
+    }
+    add(new THREE.PlaneGeometry(H * 2, H * 2).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x14151b, roughness: 0.8 }), X, WH, Z);
+    const lightM = new THREE.MeshBasicMaterial({ color: col(0xe8f0ff, 1.1) });
+    for (let i = -H + 6; i < H - 3; i += 8) add(new THREE.BoxGeometry(H * 1.4, 0.08, 0.6), lightM, X, WH - 0.1, Z + i);
+    // 방마다 다른 장식 (걸어 다니는 영역 바깥 2m 띠 안에 둔다)
+    const R = H - 1.1;
+    if (m.kind === 'lobby') {
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { add(new THREE.BoxGeometry(1.6, WH, 1.6), wallM, X + sx * R, WH / 2, Z + sz * R); add(new THREE.BoxGeometry(0.12, WH - 1, 0.12), neon, X + sx * (R - 0.85), WH / 2, Z + sz * (R - 0.85)); }
+      add(new THREE.TorusGeometry(5, 0.08, 6, 64).rotateX(Math.PI / 2), neon, X, WH - 1.4, Z);
+    } else if (m.kind === 'server') {
+      for (const sx of [-1, 1]) for (let zz = -H + 4; zz < H - 3; zz += 3.2) {
+        add(new THREE.BoxGeometry(1.4, 3.4, 2.6), wallM, X + sx * R, 1.7, Z + zz);
+        for (let y = 0.6; y < 3.2; y += 0.5) add(new THREE.BoxGeometry(0.04, 0.05, 2.0), Math.random() < 0.5 ? neon : dim, X + sx * (R - 0.72), y, Z + zz);
+      }
+    } else if (m.kind === 'lab') {
+      const glass = new THREE.MeshStandardMaterial({ color: 0x8ab0c8, transparent: true, opacity: 0.25, roughness: 0.1, metalness: 0.2, depthWrite: false });
+      const liquid = new THREE.MeshBasicMaterial({ color: col(0xff2bd6, 0.9), transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
+      for (const sx of [-1, 1]) for (let zz = -H + 5; zz < H - 4; zz += 5) {
+        add(new THREE.CylinderGeometry(0.9, 0.9, 0.4, 20), wallM, X + sx * R, 0.2, Z + zz);
+        add(new THREE.CylinderGeometry(0.8, 0.8, 3.2, 20, 1, true), glass, X + sx * R, 2, Z + zz);
+        add(new THREE.CylinderGeometry(0.7, 0.7, 2.6, 20), liquid, X + sx * R, 1.7, Z + zz);
+        add(new THREE.CylinderGeometry(0.9, 0.9, 0.4, 20), wallM, X + sx * R, 3.8, Z + zz);
+      }
+    } else if (m.kind === 'gallery') {
+      const [c, g] = canvas(512, 256); g.fillStyle = '#0a0b18'; g.fillRect(0, 0, 512, 256);
+      for (let i = 0; i < 900; i++) { g.fillStyle = pick(['#ffcf8a', '#7ff6ff', '#ff8ae6', '#ffffff', '#ffb347']); g.globalAlpha = Math.random() * 0.8; g.fillRect(Math.random() * 512, 90 + Math.random() * 166, 2, 2); }
+      const city = new THREE.MeshBasicMaterial({ map: tex(c) });
+      for (const sx of [-1, 1]) add(new THREE.PlaneGeometry(H * 2 - 4, 6).rotateY(-sx * Math.PI / 2), city, X + sx * (H - 0.05), 4.2, Z);
+    } else if (m.kind === 'clock') {
+      const [c, g] = canvas(1024, 1024);
+      g.fillStyle = '#100810'; g.beginPath(); g.arc(512, 512, 500, 0, 7); g.fill();
+      g.strokeStyle = '#ff5a8a'; g.lineWidth = 14; g.shadowColor = '#ff2b6a'; g.shadowBlur = 30; g.beginPath(); g.arc(512, 512, 480, 0, 7); g.stroke();
+      g.font = 'bold 110px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ffd8e8';
+      const NUM = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+      NUM.forEach((n, i) => { const a = (i / 12) * Math.PI * 2; g.fillText(n, 512 + Math.sin(a) * 380, 512 - Math.cos(a) * 380); });
+      for (let i = 0; i < 60; i++) { const a = (i / 60) * Math.PI * 2; g.fillRect(512 + Math.sin(a) * 455 - 3, 512 - Math.cos(a) * 455 - 3, 6, i % 5 ? 10 : 26); }
+      const face = add(new THREE.CircleGeometry(9, 64), new THREE.MeshBasicMaterial({ map: tex(c), transparent: true }), X, 9.5, Z - H + 0.06);
+      face.scale.setScalar(0.95);
+      const handM = new THREE.MeshBasicMaterial({ color: col(0xffd8e8, 1.6) });
+      const h1 = add(new THREE.BoxGeometry(0.35, 6.5, 0.1).translate(0, 3.0, 0), handM, X, 9.5, Z - H + 0.2);
+      const h2 = add(new THREE.BoxGeometry(0.5, 4.2, 0.1).translate(0, 1.9, 0), handM, X, 9.5, Z - H + 0.25);
+      clockHands = [h1, h2];
+      for (const sx of [-1, 1]) for (let zz = -H + 6; zz < H - 4; zz += 7) { add(new THREE.BoxGeometry(1.6, WH, 1.6), wallM, X + sx * R, WH / 2, Z + zz); add(new THREE.BoxGeometry(0.14, WH - 1, 0.14), neon, X + sx * (R - 0.9), WH / 2, Z + zz); }
+    }
+    const lift = k < ROOMS.length - 1 ? makePad(X, Z - H + 5, m.theme, '엘리베이터 ▲') : null;
+    return {
+      name: m.name, center: V(X, 0, Z), start: V(X, 0, Z + H - 4), lift: lift && lift.pos.clone(),
+      x0: X - H + 3, x1: X + H - 3, half: H, boss: !!m.boss || m.kind === 'clock',
+    };
+  });
 
   // ---- 월드 API ----
   const inside = (x, z, m) => WALK.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
@@ -831,13 +947,15 @@ export function buildStreet(scene) {
 
   return {
     start: V(0, 0, -12),
+    rooms, towerDoor: pads[0].pos.clone(),
+    showPad(i, on) { if (pads[i]) pads[i].on.visible = on; },
     gates,
     curGate,
     openGate(i) { const g = gates[i]; if (g && !g.open) { g.open = true; g.openT = 0; } },
     // 체크포인트용: i 이전 방벽은 열고 i부터는 닫는다
     setGates(i) { gates.forEach((g, k) => { g.open = k < i; g.openT = g.open ? 1 : 0; g.group.visible = !g.open; g.mat.uniforms.uOpen.value = g.open ? 1 : 0; }); },
     // 걸을 수 있는 영역 안으로 밀어 넣고, 닫힌 방벽을 넘지 못하게 한다
-    raiseRear(z) { dropRearNow(); rear = makeGate(z); rear.openT = 1; rear.closing = true; rear.mat.uniforms.uOpen.value = 1; },
+    raiseRear(z, indoor = false) { dropRearNow(); rear = makeGate(z, indoor); rear.openT = 1; rear.closing = true; rear.mat.uniforms.uOpen.value = 1; },
     lowerRear() { if (rear && !rear.open) { rear.open = true; rear.closing = false; } },
     clearRear: dropRearNow,
     get rear() { return rear; },
@@ -857,14 +975,14 @@ export function buildStreet(scene) {
     },
     blocked(p) { return p.y < 70 && !inside(p.x, p.z, 0); },
     // z 구간 [zMin, zMax] 안에서 걸을 수 있는 무작위 지점. avoid에서 minD~maxD 떨어진 곳
-    spawnInZone(zMin, zMax, avoid, minD = 12, maxD = 38) {
+    spawnInZone(zMin, zMax, avoid, minD = 12, maxD = 38, xr = [-34, 34]) {
       for (let i = 0; i < 80; i++) {
-        const z = rnd(zMin, zMax), x = rnd(-34, 34);
+        const z = rnd(zMin, zMax), x = rnd(xr[0], xr[1]);
         if (!inside(x, z, 1.5)) continue;
         if (avoid) { const d = Math.hypot(x - avoid.x, z - avoid.z); if (d < minD || d > maxD) continue; }
         return V(x, 0, z);
       }
-      return V(0, 0, (zMin + zMax) / 2);
+      return V((xr[0] + xr[1]) / 2, 0, (zMin + zMax) / 2);
     },
     update(dt, playerPos, camera, viewportH) {
       time += dt;
@@ -882,6 +1000,11 @@ export function buildStreet(scene) {
           if (g.openT >= 1) g.group.visible = false;
         }
       }
+      const indoor = playerPos.x > 300; // 타워 안에서는 비가 오지 않는다
+      rain.visible = splash.visible = !indoor;
+      for (const s of steam) s.visible = !indoor;
+      for (const pd of pads) if (pd.on.visible) { pd.beam.material.opacity = 0.16 + 0.1 * Math.sin(time * 4); pd.beam.rotation.y += dt; }
+      if (clockHands) { clockHands[0].rotation.z = -time * 0.5; clockHands[1].rotation.z = -time * 0.04; }
       rainU.uTime.value = time;
       rainU.uCenter.value.set(playerPos.x, 0, playerPos.z);
       sky.position.copy(camera.position);
