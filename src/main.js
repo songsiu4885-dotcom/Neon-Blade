@@ -203,7 +203,7 @@ combat.onKill = (e) => {
   inv.kills++;
   const M = player.mods;
   if (player.hp < player.maxHp && M.killHeal) player.hp = Math.min(player.maxHp, player.hp + M.killHeal);
-  if (player.stamina >= player.maxStamina) return;
+  if (!M.killGauge || player.stamina >= player.maxStamina) return; // 기본은 처치해도 대시 게이지가 차지 않는다 (특수 칩 〈처치 환급 장치〉로만)
   player.stamina = Math.min(player.maxStamina, player.stamina + M.killGauge);
   audio.gauge();
   hud.animate([{ filter: 'brightness(2.2)' }, { filter: 'brightness(1)' }], { duration: 350 });

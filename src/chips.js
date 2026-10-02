@@ -5,7 +5,7 @@ export const SLOTS = { basic: 3, special: 2 };
 export const KIT = { name: '수리 키트', desc: '체력 45% 회복 (Q 또는 배낭에서 사용)', price: 70, heal: 0.45, max: 5 };
 
 export const defaultMods = () => ({
-  extraDash: 0, rechargeMul: 1, killGauge: 1, dodgeSlow: 0.5, counterTime: 0, counterMul: 2, dodgeRage: 0,
+  extraDash: 0, rechargeMul: 1, killGauge: 0, dodgeSlow: 0.5, counterTime: 0, counterMul: 2, dodgeRage: 0,
   rampBonus: 0, rampGain: 1, hpBonus: 0, killHeal: 0, dmgTaken: 1, dmgMul: 1, postureMul: 1, dashCutMul: 1,
   hitGauge: 0, speedMul: 1, overdrive: false, hitHeal: 0,
 });
