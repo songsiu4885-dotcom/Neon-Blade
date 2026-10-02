@@ -271,8 +271,8 @@ export class Player {
         dir = cam.forward();
       }
       dir.y = 0; dir.normalize();
-      // 대시 보정: 대시 방향 20° 안, 8m 안의 적이면 그쪽으로 살짝 꺾는다
-      const tg = combat?.assist(this, dir, 8, 20);
+      // 대시 보정: 대시 방향 35° 안, 11m 안의 적이면 그쪽으로 꺾어 확실히 베고 지나가게 한다
+      const tg = combat?.assist(this, dir, 11, 35);
       if (tg) dir.set(tg.pos.x - this.pos.x, 0, tg.pos.z - this.pos.z).normalize();
       this.dashDir.copy(dir);
       this.dashing = true;
@@ -365,7 +365,7 @@ export class Player {
 
   _updateAttack(dt, wish, combat) {
     const a = this.atk, def = a.def;
-    a.t += dt * (this.rampage ? 1.25 : 1); // 폭주 중에는 공격이 빨라진다
+    a.t += dt * (this.rampage ? 1.25 : 1) * (this.mods.atkSpeed || 1); // 폭주·가속 칩이 있으면 공격이 빨라진다
     const activeStart = def.wind, activeEnd = def.wind + def.act, total = activeEnd + def.rec;
 
     // 돌진: 대상에 거의 붙으면 멈춘다
@@ -461,3 +461,7 @@ export class Player {
     return out;
   }
 }
+
+// 아담(복제체)이 주인공과 같은 칼 동작을 쓰도록 내보낸다
+export const POSES = { COMBO, REST_POSE, DASH_KEYS, HEAVY, DASH_SLASH };
+export { spline, easeInOut };

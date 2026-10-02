@@ -435,7 +435,9 @@ export function buildStreet(scene) {
   }
 
   // 건물 하나: 길을 향한 면(nx, nz)에 상점/네온/간판을 붙인다
+  const foots = []; // 건물 바닥 영역 (충돌 점검용)
   function building(x0, x1, z0, z1, hr, nx, nz, style) {
+    foots.push({ x0, x1, z0, z1 });
     const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
     const h = rnd(hr[0], hr[1]);
     const v = style ?? Math.floor(Math.random() * 3);
@@ -538,7 +540,11 @@ export function buildStreet(scene) {
         while (s < e - 0.5) {
           let L = Math.min(rnd(8, 20), e - s);
           if (e - (s + L) < 4) L = e - s;
-          const dpt = rnd(14, 24);
+          // 건물 깊이가 다른 길을 덮지 않도록 줄인다 (덮으면 건물 속을 걸어 다니게 된다)
+          let dpt = rnd(14, 24);
+          const foot = (dp) => sd.nx ? (sd.nx > 0 ? [sd.fixed - dp, sd.fixed, s, s + L] : [sd.fixed, sd.fixed + dp, s, s + L])
+            : (sd.nz > 0 ? [s, s + L, sd.fixed - dp, sd.fixed] : [s, s + L, sd.fixed, sd.fixed + dp]);
+          while (dpt > 2 && overlapsWalk(...foot(dpt), -0.3)) dpt -= 1;
           if (sd.nx) {
             const x0 = sd.nx > 0 ? sd.fixed - dpt : sd.fixed;
             building(x0, x0 + dpt, s, s + L, r.h, sd.nx, 0, r.style);
@@ -717,7 +723,7 @@ export function buildStreet(scene) {
   }
 
   // ---- 비 ----
-  const RAIN = 1500;
+  const RAIN = 2600;
   const rainGeo = new THREE.BufferGeometry();
   const pos = new Float32Array(RAIN * 6), end = new Float32Array(RAIN * 2), seed = new Float32Array(RAIN * 2);
   for (let i = 0; i < RAIN; i++) {
@@ -727,21 +733,23 @@ export function buildStreet(scene) {
   rainGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   rainGeo.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
   rainGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-  const rainU = { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(50, 26, 50) } };
+  const rainU = { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(44, 22, 44) } };
+  // 내리는 빗줄기: 가까울수록 길고 밝게, 바람에 살짝 비스듬히
   const rain = new THREE.LineSegments(rainGeo, new THREE.ShaderMaterial({
     uniforms: rainU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: `attribute float aEnd; attribute float aSeed; uniform float uTime; uniform vec3 uCenter; uniform vec3 uBox; varying float vA;
       void main(){
-        vec3 p = position; float sp = 30.0 + aSeed*14.0;
-        vec3 w = vec3(p.x*uBox.x, p.y*uBox.y - uTime*sp, p.z*uBox.z);
+        vec3 p = position; float sp = 26.0 + aSeed*12.0;
+        vec3 w = vec3(p.x*uBox.x + uTime*sp*0.08, p.y*uBox.y - uTime*sp, p.z*uBox.z);
         w.x = mod(w.x - uCenter.x + uBox.x*0.5, uBox.x) - uBox.x*0.5 + uCenter.x;
         w.z = mod(w.z - uCenter.z + uBox.z*0.5, uBox.z) - uBox.z*0.5 + uCenter.z;
         w.y = mod(w.y, uBox.y);
-        w.x += aEnd*0.15; w.y += aEnd*1.2;
+        float len = 1.1 + aSeed*0.9;
+        w.x -= aEnd*len*0.08; w.y += aEnd*len;
         vec4 mv = viewMatrix*vec4(w,1.0); float dist = length(mv.xyz);
-        vA = (1.0 - aEnd*0.8) * 0.15 * clamp(1.0 - dist/42.0, 0.0, 1.0) * smoothstep(1.5, 5.0, dist);
+        vA = (1.0 - aEnd*0.75) * (0.28 + 0.2*aSeed) * clamp(1.0 - dist/38.0, 0.0, 1.0) * smoothstep(0.6, 2.5, dist);
         gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: 'varying float vA; void main(){ gl_FragColor = vec4(0.62,0.72,1.0, vA); }'
+    fragmentShader: 'varying float vA; void main(){ gl_FragColor = vec4(0.7,0.8,1.0, vA); }'
   }));
   rain.frustumCulled = false;
   scene.add(rain);
@@ -941,13 +949,14 @@ export function buildStreet(scene) {
   // ---- 월드 API ----
   const inside = (x, z, m) => WALK.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
-  let time = 0;
+  let time = 0, rainOn = true;
   // 가장 먼저 닫혀 있는 방벽 (앞쪽에서부터 차례로 열린다)
   const curGate = () => gates.find((g) => !g.open) || null;
 
   return {
     start: V(0, 0, -12),
-    rooms, towerDoor: pads[0].pos.clone(),
+    rooms, towerDoor: pads[0].pos.clone(), foots, WALK,
+    setRain(on) { rainOn = on; },
     showPad(i, on) { if (pads[i]) pads[i].on.visible = on; },
     gates,
     curGate,
@@ -1001,7 +1010,7 @@ export function buildStreet(scene) {
         }
       }
       const indoor = playerPos.x > 300; // 타워 안에서는 비가 오지 않는다
-      rain.visible = splash.visible = !indoor;
+      rain.visible = splash.visible = !indoor && rainOn;
       for (const s of steam) s.visible = !indoor;
       for (const pd of pads) if (pd.on.visible) { pd.beam.material.opacity = 0.16 + 0.1 * Math.sin(time * 4); pd.beam.rotation.y += dt; }
       if (clockHands) { clockHands[0].rotation.z = -time * 0.5; clockHands[1].rotation.z = -time * 0.04; }

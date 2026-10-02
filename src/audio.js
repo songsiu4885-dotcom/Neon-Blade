@@ -20,6 +20,9 @@ class AudioSys {
     this.vol = 0.8; this.musicVol = 0.6;
   }
 
+  // 빗소리 켜기/끄기 (설정)
+  setRain(on) { this.rainOn = on; if (this.rainGain) this.rainGain.gain.value = on ? 0.045 : 0; }
+
   setVolumes(master, music) {
     this.vol = master; this.musicVol = music;
     if (this.master) this.master.gain.value = this.muted ? 0 : this.vol;
@@ -199,7 +202,7 @@ class AudioSys {
     const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
     const bp = ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 7000;
-    const g = ctx.createGain(); g.gain.value = 0.045;
+    const g = (this.rainGain = ctx.createGain()); g.gain.value = this.rainOn === false ? 0 : 0.045;
     src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(this.sfx);
     src.start();
   }

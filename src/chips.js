@@ -7,7 +7,7 @@ export const KIT = { name: '수리 키트', desc: '체력 45% 회복 (Q 또는 �
 export const defaultMods = () => ({
   extraDash: 0, rechargeMul: 1, killGauge: 0, dodgeSlow: 0.5, counterTime: 0, counterMul: 2, dodgeRage: 0,
   rampBonus: 0, rampGain: 1, hpBonus: 0, killHeal: 0, dmgTaken: 1, dmgMul: 1, postureMul: 1, dashCutMul: 1,
-  hitGauge: 0, speedMul: 1, overdrive: false, hitHeal: 0,
+  hitGauge: 0, speedMul: 1, overdrive: false, hitHeal: 0, rangeMul: 1, atkSpeed: 1,
 });
 
 export const CHIPS = [
@@ -21,6 +21,10 @@ export const CHIPS = [
   { id: 'recharge', kind: 'basic', price: 140, name: '쾌속 충전기', desc: '대시 충전 40% 빨라짐', apply: (m) => { m.rechargeMul *= 0.6; } },
   { id: 'posture+', kind: 'basic', price: 220, name: '자세 파쇄기', desc: '자세 게이지 피해 +40%', apply: (m) => { m.postureMul *= 1.4; } },
   { id: 'legs', kind: 'basic', price: 110, name: '강화 다리', desc: '이동 속도 +12%', apply: (m) => { m.speedMul *= 1.12; } },
+  { id: 'reach', kind: 'basic', price: 200, name: '연장 칼날', desc: '공격 범위 +20% (닿는 거리)', apply: (m) => { m.rangeMul *= 1.2; } },
+  { id: 'reach2', kind: 'basic', price: 450, name: '플라즈마 칼날', desc: '공격 범위 +35%, 휘두르는 폭도 넓어짐', apply: (m) => { m.rangeMul *= 1.35; m.arcAdd = (m.arcAdd || 0) + 25; } },
+  { id: 'speed', kind: 'basic', price: 230, name: '가속 서보 모터', desc: '공격 속도 +15%', apply: (m) => { m.atkSpeed *= 1.15; } },
+  { id: 'speed2', kind: 'basic', price: 470, name: '초전도 근섬유', desc: '공격 속도 +28%', apply: (m) => { m.atkSpeed *= 1.28; } },
   { id: 'repair', kind: 'basic', price: 300, name: '자가 수리 회로', desc: '적 처치 시 체력 +5', apply: (m) => { m.killHeal += 5; } },
   // ---- 특수 개조 ----
   { id: 'overdrive', kind: 'special', price: 520, name: '오버드라이브', desc: '공격하면 폭주 게이지가 찬다. 가득 차면 10초간 피해 +50%, 공격·이동 가속', apply: (m) => { m.overdrive = true; } },

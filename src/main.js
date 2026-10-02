@@ -10,7 +10,7 @@ import { Zones } from './waves.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
 import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
-import { STORY, ZONE_NAMES, ZONE_BONUS, ZONE_BOSS, StoryUI } from './story.js';
+import { STORY, ZONE_NAMES, ZONE_BONUS, ZONE_BOSS, BOSS_NAMES, StoryUI } from './story.js';
 import { DoctorShop, Backpack, SETTINGS_DEFAULT } from './shop.js';
 
 const canvas = document.getElementById('game');
@@ -134,7 +134,9 @@ const zoneDefs = ZONE_NAMES.map((name, i) => {
   };
 });
 zoneDefs[12].bossAt = V(0, 0, -952);
-zoneDefs[17].bossAt = V(env.rooms[4].center.x, 0, env.rooms[4].center.z - 12);
+zoneDefs[15].bossAt = V(env.rooms[2].center.x, 0, env.rooms[2].center.z - 6);
+zoneDefs[17].bossAt = V(env.rooms[4].center.x, 0, env.rooms[4].center.z - 8);
+zoneDefs[17].rush = true;
 for (const z of zoneDefs) if (z.bossKey && STORY.pre[z.bossKey]) z.pre = () => story.play(STORY.pre[z.bossKey]);
 
 const bannerEl = $('banner');
@@ -148,11 +150,26 @@ const zones = new Zones(combat, env, zoneDefs, {
   onStart(i) {
     shop.setAvailable(false);
     zoneCredits = inv.credits; zoneKills = inv.kills;
-    const bossName = { jugg: '파쇄기 골리앗', twin: '쌍둥이 집행자', warden: '감시자 아르고스', gate: '타워 수문장 헤카톤', mirror: '복제체 ZERO-01', adam: '관리자 아담' }[zoneDefs[i].bossKey];
-    banner(bossName ? `${zoneDefs[i].bossKey === 'adam' ? 'FINAL BOSS' : 'BOSS'} · ${bossName}` : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
+    const bossName = zoneDefs[i].rush ? '보스 러시' : BOSS_NAMES[zoneDefs[i].bossKey];
+    banner(bossName ? `${zoneDefs[i].bossKey === 'adam' ? 'FINAL BATTLE' : 'BOSS'} · ${bossName}` : `ZONE ${i + 1} · ${zoneDefs[i].name}`, 2600);
     if (STORY.zoneStart[i]?.length) story.say(STORY.zoneStart[i]);
   },
-  onWave(i, k) { if (k > 1) { pop('증원', '#ff8a7a'); audio.warn(); } },
+  onWave(i, k, total, wave) {
+    if (zoneDefs[i].rush) { // 보스 러시: 다음 보스 이름을 크게
+      const key = Object.keys(wave)[0];
+      banner(`${key === 'adam' ? 'FINAL BOSS' : `${k} / ${total - 1}`} · ${key === 'adam' ? BOSS_NAMES.adam : '복제 ' + BOSS_NAMES[key]}`, 2400);
+      audio.warn();
+      return;
+    }
+    if (k > 1) { pop('증원', '#ff8a7a'); audio.warn(); }
+  },
+  // 보스가 쓰러졌다: 남은 졸개는 멈춘다. 보스 러시라면 다음 보스 전에 조금 회복
+  onBossDown(i, k, total) {
+    if (!zoneDefs[i].rush || k >= total) return;
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.15);
+    pop('회복 +15%', '#7fffb0');
+    if (STORY.rush?.[k]) story.say(STORY.rush[k]);
+  },
   async onClear(i) {
     audio.gateOpen();
     const g = env.gates[zoneDefs[i].gate];
@@ -234,7 +251,8 @@ player.onRampage = (on) => {
   rageFx.classList.toggle('on', on);
   if (on) { pop('RAMPAGE', '#ffd54a'); fx.flash(0.2); vib(60); }
 };
-player.onPerfectDodge = (src) => {
+player.onPerfectDodge = (hit) => {
+  const src = hit.owner ?? hit; // 바닥 위험 지역은 그걸 만든 보스에게 반격이 돌아간다
   perfects++;
   audio.dodge();
   slowT = player.mods.dodgeSlow;
@@ -242,9 +260,9 @@ player.onPerfectDodge = (src) => {
   slowEl.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 700 });
   rig.shake(0.02);
   player.addRage(player.mods.dodgeRage);
-  if (src.boss && src.alive && !src.invulnerable) { // 보스에게는 큰 피해
-    if (src.addPosture(60)) combat._broken(src);
-    src.hp = Math.max(1, src.hp - 45);
+  if (src.boss && src.alive && !src.invulnerable) { // 보스에게는 자세 피해 (한 패턴에서 여러 번 피해도 조금씩만)
+    if (src.addPosture(hit.owner ? 22 : 45)) combat._broken(src);
+    src.hp = Math.max(1, src.hp - (hit.owner ? 15 : 30));
     combat.fx.sparks(new THREE.Vector3(src.pos.x, 2.4, src.pos.z), new THREE.Vector3(0, 1, 0), 24, 0x7ff6ff);
   }
 };
@@ -354,6 +372,8 @@ function stats() {
     ['대시 칸', player.maxStamina],
     ['대시 충전', fmt(1 / M.rechargeMul)],
     ['이동 속도', fmt(M.speedMul)],
+    ['공격 범위', fmt(M.rangeMul)],
+    ['공격 속도', fmt(M.atkSpeed)],
     ['자세 피해', fmt(M.postureMul)],
     ['처치 수', inv.kills],
     ['진행', `ZONE ${Math.min(zones.i + 1, zones.total)} / ${zones.total}`],
@@ -366,6 +386,8 @@ try { Object.assign(settings, JSON.parse(localStorage.getItem('nb_settings') || 
 const help = $('help');
 function applySettings(s) {
   audio.setVolumes(s.master, s.music);
+  audio.setRain(s.rainSound !== false);
+  env.setRain?.(s.rainFx !== false);
   rig.sens = s.sens;
   rig.shakeMul = s.shake ? 1 : 0;
   const coarse = matchMedia('(pointer: coarse)').matches;

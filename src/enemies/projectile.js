@@ -3,7 +3,7 @@ import { audio } from '../audio.js';
 
 // 탄환 풀. 플레이어에게 닿으면 피해, 패링하면 발사자 쪽으로 되돌아가 적을 때린다.
 export class Projectiles {
-  constructor(scene, fx, n = 48) {
+  constructor(scene, fx, n = 96) {
     this.fx = fx;
     const geo = new THREE.SphereGeometry(0.28, 8, 6);
     const haloGeo = new THREE.SphereGeometry(0.5, 8, 6);
@@ -33,6 +33,14 @@ export class Projectiles {
     p.active = true;
     p.mesh.visible = true;
     audio.shot();
+  }
+
+  // 플레이어 몸 높이에서 수평으로 퍼지는 원형 탄막 (위에서 비스듬히 떨어지면 거의 맞지 않아서)
+  ring(x, z, n, speed, dmg, owner, off = Math.random() * 6, r0 = 1.4, y = 1.15) {
+    for (let i = 0; i < n; i++) {
+      const a = off + (i / n) * Math.PI * 2;
+      this.spawn(new THREE.Vector3(x + Math.cos(a) * r0, y, z + Math.sin(a) * r0), new THREE.Vector3(Math.cos(a) * speed, 0, Math.sin(a) * speed), dmg, owner);
+    }
   }
 
   clear() {

@@ -281,23 +281,23 @@ export class Executioner extends Enemy {
 // =================== 엘리트: 센티넬 — 3연발 부채꼴 사격 / 전방위 탄막 ===================
 export class Sentinel extends Enemy {
   constructor(x, z) {
-    super({ maxHp: 260, radius: 1.0, hitY: 3.4, maxPosture: 130 });
+    super({ maxHp: 260, radius: 1.0, hitY: 2.0, maxPosture: 130 });
     this.elite = true; this.flying = true;
-    this.pos.set(x, 3.4, z);
+    this.pos.set(x, 2.0, z);
     this.state = 'hover'; this.t = 0; this.cd = 1.8; this.pattern = 0;
     this.strafe = 1; this.strafeT = 2.5; this.bob = Math.random() * 6;
     this.J = buildDrone(this);
     this.body.scale.setScalar(1.9);
     this.aim = laser();
     this.locked = V3(0, 0, 0);
-    this._last = V3(x, 3.4, z); this.tilt = new THREE.Vector2();
+    this._last = V3(x, 2.0, z); this.tilt = new THREE.Vector2();
   }
   cancelAttack() { this.state = 'hover'; this.cd = 1.2; this.aim.visible = false; }
   ai(dt, ctx) {
     if (!this.aim.parent) ctx.scene.add(this.aim);
     const p = ctx.player.pos, dx = p.x - this.pos.x, dz = p.z - this.pos.z, dist = Math.hypot(dx, dz) || 1e-6;
     const nx = dx / dist, nz = dz / dist;
-    this.bob += dt * 1.6; this.pos.y = 3.4 + Math.sin(this.bob) * 0.2;
+    this.bob += dt * 1.6; this.pos.y = 2.0 + Math.sin(this.bob) * 0.15; // 낮게 떠서 탄막이 몸 높이로 날아온다
     this.faceToward(dx, dz, dt, 6);
     if (this.state === 'hover') {
       this.attacking = false;
@@ -326,13 +326,8 @@ export class Sentinel extends Enemy {
             const d = base.clone().applyAxisAngle(V3(0, 1, 0), a);
             ctx.projectiles.spawn(this.pos.clone().addScaledVector(d, 1.4), d.multiplyScalar(17), 9, this);
           }
-        } else { // 전방위 탄막: 플레이어 높이에 닿도록 아래로 기울여 쏜다
-          const N = 12, off = Math.random() * 6;
-          for (let i = 0; i < N; i++) {
-            const a = off + (i / N) * Math.PI * 2, sp = 11;
-            const d = V3(Math.cos(a) * sp, -(this.pos.y - 1.1) / (7.5 / sp), Math.sin(a) * sp);
-            ctx.projectiles.spawn(V3(this.pos.x + Math.cos(a) * 1.4, this.pos.y, this.pos.z + Math.sin(a) * 1.4), d, 8, this);
-          }
+        } else { // 전방위 탄막: 몸 높이에서 수평으로 퍼진다
+          ctx.projectiles.ring(this.pos.x, this.pos.z, 12, 11, 8, this);
         }
         this.pattern++;
         this.state = 'recover'; this.t = 0; this.alert = 0; this.attacking = false; this.aim.visible = false;
@@ -345,7 +340,7 @@ export class Sentinel extends Enemy {
   update(dt, ctx) {
     super.update(dt, ctx);
     if (!this.alive) { this.aim.visible = false; return; }
-    if (this.broken) { this.aim.visible = false; this.pos.y += (1.5 - this.pos.y) * (1 - Math.exp(-5 * dt)); }
+    if (this.broken) { this.aim.visible = false; this.pos.y += (1.2 - this.pos.y) * (1 - Math.exp(-5 * dt)); }
     this.hitY = this.pos.y;
     for (let i = 0; i < this.J.rotors.length; i++) this.J.rotors[i].rotation.y += dt * (i % 2 ? 34 : -34);
     if (dt > 0) {

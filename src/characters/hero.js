@@ -6,7 +6,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // 걷기/달리기/대기는 모션캡처를 쓰고, 그 위에 칼 잡은 팔(IK), 왼팔 가드, 돌진 런지, 허리 비틀기를 덧입힌다.
 
 const URL = `${import.meta.env.BASE_URL}models/Soldier.glb`;
-let cache = null;
+let cache = null, loaded = null;
+const srcMaps = new Map(); // 재질 이름 → 원래 텍스처 (복제 모델을 다른 색으로 칠할 때 쓴다)
+export const heroGltf = () => loaded;
 // fetch가 막힌 곳(아티팩트 뷰어)에서도 읽히도록 data: 주소는 직접 풀어서 쓴다
 async function loadBuffer(url) {
   if (url.startsWith('data:')) {
@@ -24,7 +26,10 @@ export function loadHero() {
     const loader = new GLTFLoader();
     // 텍스처를 fetch(blob:) 대신 <img>로 읽는다 (fetch가 막혀도 이미지는 허용된다)
     loader.register((parser) => { parser.textureLoader = new THREE.TextureLoader(parser.options.manager); return { name: 'img_textures' }; });
-    return loader.parseAsync(buf, '');
+    return loader.parseAsync(buf, '').then((g) => {
+      g.scene.traverse((o) => { if (o.isMesh && o.material.map) srcMaps.set(o.material.name, o.material.map); });
+      return (loaded = g);
+    });
   });
   return cache;
 }
@@ -69,7 +74,7 @@ function twoBone(b1, b2, b3, target, pole) {
 }
 
 // 텍스처를 흑백으로 바꿔 흰 갑옷으로 칠한다 (명암 무늬만 남긴다)
-function regrade(t) {
+function regrade(t, dark = false) {
   const img = t.image, w = img.width, h = img.height;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d'); g.drawImage(img, 0, 0);
@@ -78,7 +83,8 @@ function regrade(t) {
     const l = (p[i] * 0.3 + p[i + 1] * 0.59 + p[i + 2] * 0.11) / 255;
     const v = Math.pow(l, 0.8);
     // 흰 갑옷: 밝은 면은 거의 흰색, 무늬의 어두운 부분은 회색 이음새로 남는다
-    p[i] = 255 * (0.3 + 0.68 * v); p[i + 1] = 255 * (0.31 + 0.68 * v); p[i + 2] = 255 * (0.33 + 0.67 * v);
+    if (dark) { p[i] = 255 * (0.08 + 0.78 * v); p[i + 1] = 255 * (0.09 + 0.82 * v); p[i + 2] = 255 * (0.11 + 0.9 * v); } // 검은 갑옷 (흰색으로 바꾸기 전 색)
+    else { p[i] = 255 * (0.3 + 0.68 * v); p[i + 1] = 255 * (0.31 + 0.68 * v); p[i + 2] = 255 * (0.33 + 0.67 * v); }
   }
   g.putImageData(d, 0, 0);
   const nt = new THREE.CanvasTexture(c);
@@ -86,31 +92,37 @@ function regrade(t) {
   return nt;
 }
 
-export function buildHero(gltf) {
+// o.dark: 검은 갑옷과 붉은 발광 (아담). o.dual: 왼손에도 칼. o.gun: 오른손 칼 자리에 권총을 함께 단다.
+export function buildHero(gltf, o = {}) {
   const root = new THREE.Group();
   const model = gltf.scene;
   root.add(model);
+  const T = o.dark
+    ? { visor: new THREE.Color(1.9, 0.15, 0.6), glow: new THREE.Color(1.8, 0.1, 0.55), scarf: 0x1a0a14, blade: new THREE.Color(2.0, 0.35, 1.4) }
+    : { visor: new THREE.Color(0.25, 1.6, 1.9), glow: new THREE.Color(0.35, 1.7, 1.9), scarf: 0x8a121c, blade: new THREE.Color(1.6, 2.0, 2.0) };
 
-  const bones = {};
-  model.traverse((o) => {
-    if (o.isBone) bones[o.name.replace('mixamorig', '')] = o;
-    if (o.isMesh) {
-      o.frustumCulled = false;
-      const m = o.material;
-      if (/visor/i.test(m.name)) {
-        o.material = new THREE.MeshStandardMaterial({ color: 0x0a1a20, emissive: new THREE.Color(0.25, 1.6, 1.9), emissiveIntensity: 1, roughness: 0.15, metalness: 0.6 });
+  const bones = {}, armorMats = [];
+  model.traverse((ob) => {
+    if (ob.isBone) bones[ob.name.replace('mixamorig', '')] = ob;
+    if (ob.isMesh) {
+      ob.frustumCulled = false;
+      const name = ob.material.name;
+      if (/visor/i.test(name)) {
+        ob.material = new THREE.MeshStandardMaterial({ color: 0x0a1a20, emissive: T.visor, emissiveIntensity: 1, roughness: 0.15, metalness: 0.6 });
       } else {
-        // 원래 텍스처의 무늬(명암)만 살리고 흰 갑옷으로
-        if (m.map?.image) m.map = regrade(m.map);
-        m.color.setRGB(0.95, 0.96, 1.0);
-        m.metalness = 0.15; m.roughness = 0.45;
+        const m = (ob.material = ob.material.clone()); // 같은 원본을 쓰는 다른 모델(주인공/아담)과 재질을 나누지 않는다
+        const src = srcMaps.get(name) || m.map;
+        if (src?.image) m.map = regrade(src, o.dark);
+        if (o.dark) { m.color.setRGB(0.34, 0.37, 0.43); m.metalness = 0.35; m.roughness = 0.5; }
+        else { m.color.setRGB(0.95, 0.96, 1.0); m.metalness = 0.15; m.roughness = 0.45; }
         m.envMapIntensity = 0.6;
+        armorMats.push(m);
       }
     }
   });
 
-  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 1.7, 1.9) });
-  const scarfMat = new THREE.MeshStandardMaterial({ color: 0x8a121c, roughness: 0.8, metalness: 0.05, side: THREE.DoubleSide });
+  const glow = new THREE.MeshBasicMaterial({ color: T.glow });
+  const scarfMat = new THREE.MeshStandardMaterial({ color: T.scarf, roughness: 0.8, metalness: 0.05, side: THREE.DoubleSide });
   model.updateMatrixWorld(true);
   // 뼈에 붙이는 장식: 뼈의 월드 스케일(0.01)을 상쇄해 미터 단위로 만든다
   const attach = (boneName, obj) => {
@@ -145,20 +157,53 @@ export function buildHero(gltf) {
     h.children[0].position.set(0, 0.04, 0);
   }
 
-  // 칼: 오른쪽 어깨 높이의 피벗 (매 프레임 어깨 뼈 위치로 옮긴다)
-  const pivot = new THREE.Group();
-  pivot.rotation.order = 'YXZ';
-  root.add(pivot);
-  const sword = new THREE.Group(); sword.position.y = 0.52;
-  pivot.add(sword);
-  const bladeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2.0, 2.0) });
+  // 칼: 어깨 높이의 피벗 (매 프레임 어깨 뼈 위치로 옮긴다). 칼날 부분은 blade 묶음이라 통째로 숨길 수 있다.
+  const bladeMat = new THREE.MeshBasicMaterial({ color: T.blade });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.5, metalness: 0.6 });
-  const add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; sword.add(m); return m; };
-  add(new THREE.CylinderGeometry(0.018, 0.018, 0.27, 8), dark, -0.02);
-  add(new THREE.BoxGeometry(0.1, 0.014, 0.04), dark, 0.12);
-  add(new THREE.BoxGeometry(0.03, 1.05, 0.008), bladeMat, 0.66);
-  const tip = add(new THREE.ConeGeometry(0.015, 0.06, 4), bladeMat, 1.21); tip.scale.z = 0.3;
-  const aura = add(new THREE.BoxGeometry(0.06, 1.1, 0.03), new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }), 0.68);
+  const makeSword = () => {
+    const pivot = new THREE.Group();
+    pivot.rotation.order = 'YXZ';
+    root.add(pivot);
+    const sword = new THREE.Group(); sword.position.y = 0.52;
+    pivot.add(sword);
+    const blade = new THREE.Group(); sword.add(blade);
+    const add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; blade.add(m); return m; };
+    add(new THREE.CylinderGeometry(0.018, 0.018, 0.27, 8), dark, -0.02);
+    add(new THREE.BoxGeometry(0.1, 0.014, 0.04), dark, 0.12);
+    add(new THREE.BoxGeometry(0.03, 1.05, 0.008), bladeMat, 0.66);
+    const tip = add(new THREE.ConeGeometry(0.015, 0.06, 4), bladeMat, 1.21); tip.scale.z = 0.3;
+    const aura = add(new THREE.BoxGeometry(0.06, 1.1, 0.03), new THREE.MeshBasicMaterial({ color: o.dark ? 0xff2bd6 : 0x00e5ff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }), 0.68);
+    return { pivot, sword, blade, aura };
+  };
+  const main = makeSword();
+  const { pivot, sword, aura } = main;
+  const extra = {};
+  if (o.dual) {
+    const l = makeSword();
+    Object.assign(extra, { pivotL: l.pivot, swordL: l.sword, bladeL: l.blade, auraL: l.aura, dual: true });
+  }
+  if (o.gun) {
+    // 권총: 칼 손잡이 자리. 칼 묶음 기준 +y가 손잡이 아래쪽, +z가 총구 방향(조준 자세 기준)
+    const gun = new THREE.Group(); gun.visible = false;
+    const gm = new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.35, metalness: 0.8 });
+    const gp = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); gun.add(m); };
+    gp(new THREE.BoxGeometry(0.035, 0.13, 0.055), gm, 0, 0.02, -0.01);
+    gp(new THREE.BoxGeometry(0.045, 0.06, 0.3), gm, 0, -0.07, 0.09);
+    gp(new THREE.BoxGeometry(0.012, 0.012, 0.22), bladeMat, 0.024, -0.07, 0.1);
+    sword.add(gun);
+    extra.gun = gun; extra.muzzle = new THREE.Vector3(0, -0.07, 0.26);
+  }
+  if (o.sheath) {
+    // 등에 엇갈려 멘 두 자루 (총을 쓸 때만 보인다)
+    const back = new THREE.Group(); back.visible = false;
+    for (const sgn of [-1, 1]) {
+      const b = new THREE.Group(); b.rotation.z = sgn * 0.5;
+      const m1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 0.01), bladeMat); m1.position.y = 0.2; b.add(m1);
+      const m2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.25, 6), dark); m2.position.y = -0.4; b.add(m2);
+      back.add(b);
+    }
+    extra.sheath = back;
+  }
 
   // 애니메이션 (원래 제자리 동작이라 그대로 쓴다)
   const mixer = new THREE.AnimationMixer(model);
@@ -175,7 +220,11 @@ export function buildHero(gltf) {
   const fingers = [];
   for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let i = 1; i <= 3; i++) if (bones[`RightHand${f}${i}`]) fingers.push(bones[`RightHand${f}${i}`]);
 
-  return { root, model, bones, pivot, sword, aura, bladeMat, scarf, mixer, actions, maxReach, fingers, swordTip: new THREE.Vector3(0, 1.22, 0), swordBase: new THREE.Vector3(0, 0.18, 0) };
+  const fingersL = [];
+  for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let i = 1; i <= 3; i++) if (bones[`LeftHand${f}${i}`]) fingersL.push(bones[`LeftHand${f}${i}`]);
+  if (extra.sheath) { const h = attach('Spine2', extra.sheath); h.children[0].position.set(0, 0.1, -0.2); }
+
+  return { root, model, bones, pivot, sword, aura, bladeMat, blade: main.blade, scarf, mixer, actions, maxReach, fingers, fingersL, glow, armorMats, ...extra, swordTip: new THREE.Vector3(0, 1.22, 0), swordBase: new THREE.Vector3(0, 0.18, 0) };
 }
 
 const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
@@ -272,20 +321,27 @@ export class HeroAnimator {
     B.RightArm.getWorldPosition(this._g);
     R.pivot.position.copy(R.root.worldToLocal(this._g));
     R.pivot.updateMatrixWorld(true);
-    this._rightArm();
+    this._arm('Right');
 
-    // ---- 왼팔: 가드 / 돌진 때 뒤로 뻗기 ----
-    const wL = Math.min(1, W.atk + W.charge + W.dash);
-    if (wL > 0.01) {
-      const g = clamp((s.swordYaw + 1.4) / 2.8, 0, 1);
-      const want = this._t.copy(LHAND.guardFwd).lerp(LHAND.guardBack, g * W.atk);
-      want.lerp(LHAND.charge, W.charge * (1 - W.atk));
-      want.lerp(LHAND.dash, W.dash);
-      const sh = B.LeftArm.getWorldPosition(new THREE.Vector3());
-      const goal = want.applyQuaternion(this._yawQ).add(sh);
-      goal.lerp(B.LeftHand.getWorldPosition(new THREE.Vector3()), 1 - wL);
-      const pole = this._pole.set(-0.55, -0.55, 0.45).applyQuaternion(this._yawQ);
-      twoBone(B.LeftArm, B.LeftForeArm, B.LeftHand, goal, pole);
+    // ---- 왼팔: 쌍검이면 왼손 칼까지 IK, 아니면 가드 / 돌진 때 뒤로 뻗기 ----
+    if (R.dual && R.pivotL && !R.gunMode) {
+      B.LeftArm.getWorldPosition(this._g);
+      R.pivotL.position.copy(R.root.worldToLocal(this._g));
+      R.pivotL.updateMatrixWorld(true);
+      this._arm('Left');
+    } else {
+      const wL = Math.min(1, W.atk + W.charge + W.dash + (R.gunMode ? 1 : 0));
+      if (wL > 0.01) {
+        const g = clamp((s.swordYaw + 1.4) / 2.8, 0, 1);
+        const want = this._t.copy(LHAND.guardFwd).lerp(LHAND.guardBack, g * W.atk * (R.gunMode ? 0 : 1));
+        want.lerp(LHAND.charge, W.charge * (1 - W.atk));
+        want.lerp(LHAND.dash, W.dash);
+        const sh = B.LeftArm.getWorldPosition(new THREE.Vector3());
+        const goal = want.applyQuaternion(this._yawQ).add(sh);
+        goal.lerp(B.LeftHand.getWorldPosition(new THREE.Vector3()), 1 - wL);
+        const pole = this._pole.set(-0.55, -0.55, 0.45).applyQuaternion(this._yawQ);
+        twoBone(B.LeftArm, B.LeftForeArm, B.LeftHand, goal, pole);
+      }
     }
 
     // ---- 목도리 ----
@@ -300,28 +356,30 @@ export class HeroAnimator {
   // 오른팔 IK + 칼 쥔 손.
   // 손가락은 손잡이에 수직으로 뻗고 손가락 마디 줄은 손잡이와 나란하게(검지가 칼날 쪽) 맞춘다.
   // 손을 비트는 각도는 팔뚝(60%)과 손목(40%)이 나눠 가져서 손목이 꼬여 보이지 않게 한다.
-  _rightArm() {
-    const R = this.rig, B = R.bones;
-    const S = B.RightArm.getWorldPosition(new THREE.Vector3());
-    const G = R.sword.getWorldPosition(new THREE.Vector3());
-    const H = UP.clone().applyQuaternion(R.sword.getWorldQuaternion(new THREE.Quaternion())); // 손잡이 축 (칼날 쪽)
+  _arm(side) {
+    const R = this.rig, B = R.bones, L = side === 'Left', sx = L ? -1 : 1;
+    const Arm = B[`${side}Arm`], Fore = B[`${side}ForeArm`], Hand = B[`${side}Hand`];
+    const swordG = L ? R.swordL : R.sword;
+    const S = Arm.getWorldPosition(new THREE.Vector3());
+    const G = swordG.getWorldPosition(new THREE.Vector3());
+    const H = UP.clone().applyQuaternion(swordG.getWorldQuaternion(new THREE.Quaternion())); // 손잡이 축 (칼날 쪽)
     const dir = G.clone().sub(S).normalize();
     // 손가락 방향: 팔 방향에서 손잡이 축 성분을 뺀 것
     const fdir = dir.clone().addScaledVector(H, -dir.dot(H));
     if (fdir.lengthSq() < 1e-4) fdir.set(0, -1, 0).applyQuaternion(this._yawQ).addScaledVector(H, -H.y);
     fdir.normalize();
     const local = dir.clone().applyQuaternion(this._yawQ.clone().invert()); // 몸 기준 방향
-    const up = clamp(local.y, 0, 1), cross = clamp(-local.x, 0, 1);
-    const pole = this._pole.set(0.7 + 0.1 * up - 0.3 * cross, -0.6 * (1 - up) + 0.25 * up, 0.35 - 0.6 * up - 0.4 * cross).applyQuaternion(this._yawQ);
+    const up = clamp(local.y, 0, 1), cross = clamp(-local.x * sx, 0, 1);
+    const pole = this._pole.set(sx * (0.7 + 0.1 * up - 0.3 * cross), -0.6 * (1 - up) + 0.25 * up, 0.35 - 0.6 * up - 0.4 * cross).applyQuaternion(this._yawQ);
     const wrist = G.clone().addScaledVector(fdir, -0.075);
-    twoBone(B.RightArm, B.RightForeArm, B.RightHand, wrist, pole);
+    twoBone(Arm, Fore, Hand, wrist, pole);
 
-    const mid = B.RightHandMiddle1, idx = B.RightHandIndex1, pky = B.RightHandPinky1;
+    const mid = B[`${side}HandMiddle1`], idx = B[`${side}HandIndex1`], pky = B[`${side}HandPinky1`];
     if (!mid || !idx || !pky) return;
-    const aimFingers = () => { const hp = B.RightHand.getWorldPosition(new THREE.Vector3()); aimBone(B.RightHand, mid, hp.addScaledVector(fdir, 0.1)); };
+    const aimFingers = () => { const hp = Hand.getWorldPosition(new THREE.Vector3()); aimBone(Hand, mid, hp.addScaledVector(fdir, 0.1)); };
     // 손가락 마디 줄(검지→새끼 반대)을 손잡이 축에 맞추는 데 필요한 비틀림 각도
     const rollNeeded = () => {
-      const hp = B.RightHand.getWorldPosition(new THREE.Vector3());
+      const hp = Hand.getWorldPosition(new THREE.Vector3());
       const fd = mid.getWorldPosition(new THREE.Vector3()).sub(hp).normalize();
       const kn = idx.getWorldPosition(new THREE.Vector3()).sub(pky.getWorldPosition(new THREE.Vector3()));
       kn.addScaledVector(fd, -kn.dot(fd)).normalize();
@@ -330,25 +388,26 @@ export class HeroAnimator {
     };
     aimFingers();
     const r1 = rollNeeded();
-    const forearmAxis = B.RightHand.getWorldPosition(new THREE.Vector3()).sub(B.RightForeArm.getWorldPosition(new THREE.Vector3())).normalize();
-    rotateWorld(B.RightForeArm, forearmAxis, r1.angle * 0.6);
+    const forearmAxis = Hand.getWorldPosition(new THREE.Vector3()).sub(Fore.getWorldPosition(new THREE.Vector3())).normalize();
+    rotateWorld(Fore, forearmAxis, r1.angle * 0.6);
     aimFingers();
     const r2 = rollNeeded();
-    rotateWorld(B.RightHand, r2.fd, r2.angle);
+    rotateWorld(Hand, r2.fd, r2.angle);
 
     // 손가락을 손잡이 쪽으로 감는다. 감는 방향(부호)은 처음 한 번 손끝이 손잡이에 가까워지는 쪽으로 정한다.
     const axis = idx.getWorldPosition(new THREE.Vector3()).sub(pky.getWorldPosition(new THREE.Vector3())).normalize();
-    if (R.curlSign == null) {
-      const tip = B.RightHandMiddle4 || B.RightHandMiddle3;
+    const key = L ? 'curlSignL' : 'curlSign', fingers = L ? R.fingersL : R.fingers;
+    if (R[key] == null) {
+      const tip = B[`${side}HandMiddle4`] || B[`${side}HandMiddle3`];
       const line = (p) => { const v = p.clone().sub(G); return v.addScaledVector(H, -v.dot(H)).length(); };
-      const save = R.fingers.map((f) => f.quaternion.clone());
-      const test = (sg) => { R.fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); }); for (const f of R.fingers) rotateWorld(f, axis, sg * 0.5); return line(tip.getWorldPosition(new THREE.Vector3())); };
+      const save = fingers.map((f) => f.quaternion.clone());
+      const test = (sg) => { fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); }); for (const f of fingers) rotateWorld(f, axis, sg * 0.5); return line(tip.getWorldPosition(new THREE.Vector3())); };
       const a = test(1), b = test(-1);
-      R.fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); });
-      R.curlSign = a < b ? 1 : -1;
+      fingers.forEach((f, i) => { f.quaternion.copy(save[i]); f.updateWorldMatrix(false, true); });
+      R[key] = a < b ? 1 : -1;
     }
-    for (const f of R.fingers) rotateWorld(f, axis, R.curlSign * 0.62);
-    const thumb = B.RightHandThumb2;
-    if (thumb) rotateWorld(thumb, axis, R.curlSign * 0.35);
+    for (const f of fingers) rotateWorld(f, axis, R[key] * 0.62);
+    const thumb = B[`${side}HandThumb2`];
+    if (thumb) rotateWorld(thumb, axis, R[key] * 0.35);
   }
 }

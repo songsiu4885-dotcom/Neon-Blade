@@ -1,17 +1,16 @@
 import { Thug } from './enemies/thug.js';
 import { Drone } from './enemies/drone.js';
 import { ShieldBot, Sniper, Mech, Executioner, Sentinel } from './enemies/more.js';
-import { Boss } from './enemies/boss.js';
 import { Assassin, Bomber, Gunner } from './enemies/extra.js';
-import { Juggernaut, TwinExec, Warden, Mirror, Adam } from './enemies/bosses.js';
+import { Juggernaut, TwinExec, Warden, Helix, Pylon, Gatekeeper, Adam } from './enemies/bosses.js';
 import { ZONE_WAVES, BOUNTY } from './story.js';
 
 const REG = {
   thug: Thug, drone: Drone, shield: ShieldBot, sniper: Sniper, mech: Mech, exec: Executioner, sentinel: Sentinel,
   assassin: Assassin, bomber: Bomber, gunner: Gunner,
-  jugg: Juggernaut, twin: TwinExec, warden: Warden, mirror: Mirror, gate: Boss, adam: Adam,
+  jugg: Juggernaut, twin: TwinExec, warden: Warden, helix: Helix, pylon: Pylon, gate: Gatekeeper, adam: Adam,
 };
-const FIXED = new Set(['gate', 'adam']); // 정해진 자리(bossAt)에 나타나는 보스
+const BOSSES = new Set(['jugg', 'twin', 'warden', 'helix', 'gate', 'adam']); // 구역에 bossAt이 있으면 그 자리에 나타난다
 const MIN_DIST = { sniper: 20, sentinel: 14, gunner: 14, warden: 14, default: 11 };
 const MAX_ALIVE = 16; // 동시에 존재하는 적의 수 상한 (성능과 가독성)
 
@@ -32,13 +31,14 @@ export class Zones {
   reset() {
     for (const e of this.members) e.dead = true;
     this.members = [];
-    this.combat.projectiles.clear();
+    this.combat.projectiles.clear(); this.combat.hazards.clear();
     this.i = 0;             // 현재 구역
     this.state = 'travel';  // travel | cine | fight | done
     this.k = 0;             // 투입된 하위 웨이브 수
     this.timer = 0;
     this.cleared = false;
     this.enabled = false;
+    this.bossWave = false;
     this.world.setGates(0);
     this.world.clearRear();
     this.combat.ctx.maxAtk = 5;
@@ -48,8 +48,8 @@ export class Zones {
   restartZone() {
     for (const e of this.members) e.dead = true;
     this.members = [];
-    this.combat.projectiles.clear();
-    this.state = 'travel'; this.k = 0; this.timer = 0;
+    this.combat.projectiles.clear(); this.combat.hazards.clear();
+    this.state = 'travel'; this.k = 0; this.timer = 0; this.bossWave = false;
     this.world.setGates(this.i);
     this.world.clearRear();
   }
@@ -73,6 +73,10 @@ export class Zones {
   _add(e, type) {
     e.bounty = BOUNTY[type] ?? 0;
     if (!e.boss) { e.maxHp = Math.round(e.maxHp * (1 + 0.035 * this.i)); e.hp = e.maxHp; }
+    else if (this.zone.rush && type !== 'adam') { // 최종전 보스 러시: 아담이 되살린 복제체 (체력 절반)
+      e.rush = true; e.maxHp = e.hp = Math.round(e.maxHp * 0.5); e.maxPosture *= 0.75; e.bounty = 40;
+      e.name = `복제 ${e.name}`;
+    }
     this.members.push(e); this.combat.add(e); return e;
   }
 
@@ -84,7 +88,8 @@ export class Zones {
     for (const [type, count] of Object.entries(wave)) {
       const Cls = REG[type];
       for (let n = 0; n < count; n++) {
-        if (FIXED.has(type)) { this._add(new Cls(this.zone.bossAt.x, this.zone.bossAt.z), type); continue; }
+        if (BOSSES.has(type) && this.zone.bossAt) { this._add(new Cls(this.zone.bossAt.x + (count > 1 ? (n ? 3 : -3) : 0), this.zone.bossAt.z), type); this.bossWave = true; continue; }
+        if (BOSSES.has(type)) this.bossWave = true;
         const md = MIN_DIST[type] || MIN_DIST.default;
         const p = this.world.spawnInZone(zMin, zMax, player.pos, md, md + 28, this.zone.xRange);
         this._add(new Cls(p.x, p.z), type);
@@ -105,6 +110,20 @@ export class Zones {
     this.timer = 0.4;
   }
 
+  // 보스가 쓰러지면 남은 졸개도 멈추고(폭발), 더 이상 나오지 않는다
+  _bossDown() {
+    this.bossWave = false;
+    for (const e of this.members) {
+      if (!e.alive || e.boss) continue;
+      this.combat.fx.chunks(e.pos.clone().setY(e.hitY ?? 1.2), { x: 0, y: 1, z: 0 }, 8);
+      e.alive = false; e.dead = true; e.group.visible = false;
+    }
+    this.members = [];
+    this.combat.hazards.clear(); this.combat.projectiles.clear();
+    this.timer = 2.2; // 다음 보스(러시)나 구역 정리까지 잠깐 숨 돌릴 틈
+    this.hooks.onBossDown?.(this.i, this.k, ZONE_WAVES[this.i].length);
+  }
+
   update(dt, player) {
     if (!this.enabled || player.dead || this.cleared) return;
     this.members = this.members.filter((e) => !e.dead);
@@ -114,8 +133,11 @@ export class Zones {
     } else if (this.state === 'fight') {
       this.timer -= dt;
       const waves = ZONE_WAVES[this.i];
+      if (this.bossWave && !this.members.some((e) => e.boss && e.alive)) this._bossDown();
       const alive = this.members.length;
+      if (this.bossWave) return; // 보스전: 졸개는 보스가 단계마다 부른다. 다음 웨이브는 보스가 쓰러진 뒤에만
       if (this.k < waves.length) {
+        if (this.timer > 0) return;
         const prev = Object.values(waves[this.k - 1]).reduce((a, b) => a + b, 0);
         const next = Object.values(waves[this.k]).reduce((a, b) => a + b, 0);
         // 앞 웨이브가 거의 정리되면 증원이 들어온다 (상한을 넘지 않도록)

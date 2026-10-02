@@ -103,12 +103,27 @@ export class FX {
   _initRings() {
     this.dashTint = new THREE.Color(0.45, 0.95, 1.1);
     this.rings = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 10; i++) {
       const m = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 48).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
       m.visible = false; m.userData.t = 1;
       this.scene.add(m); this.rings.push(m);
     }
+  }
+
+  // 레이저/직선 공격이 터질 때 잠깐 남는 빛기둥
+  beam(pos, angle, len, w, color = 0xff4a6a) {
+    if (!this.beams) this.beams = [];
+    let m = this.beams.find((b) => !b.visible);
+    if (!m) {
+      if (this.beams.length >= 10) m = this.beams[0];
+      else {
+        m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0, -0.5), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.frustumCulled = false; this.scene.add(m); this.beams.push(m);
+      }
+    }
+    m.position.copy(pos); m.rotation.set(0, angle, 0); m.scale.set(w * 0.7, 0.7, len);
+    m.material.color.set(color).multiplyScalar(2); m.userData.t = 0; m.userData.w = w; m.visible = true;
   }
 
   shockwave(pos, color = 0x7ff6ff, size = 1) {
@@ -205,6 +220,13 @@ export class FX {
       if (t >= 1) { m.visible = false; continue; }
       m.scale.set(6 * Math.min(1, t * 8), 0.09 * (1 - t), 1);
       m.material.opacity = 1 - t;
+    }
+    if (this.beams) for (const m of this.beams) {
+      if (!m.visible) continue;
+      m.userData.t += dt / 0.3;
+      if (m.userData.t >= 1) { m.visible = false; continue; }
+      m.material.opacity = 1 - m.userData.t;
+      m.scale.x = m.userData.w * 0.7 * (1 - m.userData.t * 0.6);
     }
     for (const m of this.rings) {
       if (!m.visible) continue;

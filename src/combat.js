@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Projectiles } from './enemies/projectile.js';
+import { Hazards } from './enemies/hazards.js';
 import { DASH_CUT } from './player.js';
 import { audio } from './audio.js';
 
@@ -12,7 +13,8 @@ export class Combat {
     this.enemies = [];
     this.world = null; // 도시(충돌)
     this.projectiles = new Projectiles(scene, fx);
-    this.ctx = { scene, fx, rig, combat: this, player: null, projectiles: this.projectiles, enemies: this.enemies, spawn: null,
+    this.hazards = new Hazards(scene, fx);
+    this.ctx = { scene, fx, rig, combat: this, player: null, projectiles: this.projectiles, hazards: this.hazards, enemies: this.enemies, spawn: null,
       get world() { return this.combat.world; },
       maxAtk: 3, attackers: () => this.enemies.filter((e) => e.attacking && !e.boss).length };
     this.hitstop = 0;
@@ -61,12 +63,13 @@ export class Combat {
   // 공격 활성 프레임마다 호출. 한 스윙당 적 1회만 맞는다.
   strike(player, atk) {
     const def = atk.def;
-    const cosHalf = Math.cos(THREE.MathUtils.degToRad(def.arc / 2));
+    const M = player.mods, range = def.range * (M.rangeMul || 1);
+    const cosHalf = Math.cos(THREE.MathUtils.degToRad(Math.min(360, def.arc + (M.arcAdd || 0)) / 2));
     for (const e of this.enemies) {
       if (!e.alive || atk.hit.has(e)) continue;
       const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d - e.radius > def.range) continue;
+      if (d - e.radius > range) continue;
       const dot = d < 1e-4 ? 1 : (dx * player.atkDir.x + dz * player.atkDir.z) / d;
       if (dot < cosHalf) continue;
       atk.hit.add(e);
@@ -204,11 +207,13 @@ export class Combat {
     this.separate();
     if (this.world) for (const e of this.enemies) if (e.alive) this.world.resolve(e.pos, e.radius);
     this.projectiles.update(dt, player, this);
+    this.hazards.update(dt, player, this.rig);
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (e.dead) {
         this.scene.remove(e.group);
         if (e.aim) this.scene.remove(e.aim);
+        e.cleanup?.();
         this.enemies.splice(i, 1);
       }
     }
