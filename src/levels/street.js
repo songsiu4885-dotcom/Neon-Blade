@@ -46,6 +46,17 @@ const BRANCHES = [
   { x0: -36, x1: -13, z0: -842, z1: -832, h: [40, 90] },
 ];
 const RECTS = [...MAIN_RECTS, ...BRANCHES];
+// 이동 판정용 영역: 옆 골목이 큰길과 딱 맞닿기만 하면 경계에 걸을 수 없는 틈이 생긴다.
+// 맞닿은 쪽으로 1.5m 겹치게 늘려 걸어서도 드나들 수 있게 한다 (건물 배치는 RECTS 그대로).
+const WALK = [...MAIN_RECTS, ...BRANCHES.map((b) => {
+  const w = { ...b };
+  for (const m of MAIN_RECTS) {
+    if (Math.min(b.z1, m.z1) - Math.max(b.z0, m.z0) <= 0) continue;
+    if (Math.abs(b.x0 - m.x1) < 0.01) w.x0 -= 1.5;
+    if (Math.abs(b.x1 - m.x0) < 0.01) w.x1 += 1.5;
+  }
+  return w;
+})];
 const MAIN = MAIN_RECTS.map((_, i) => i); // 전선/증기가 걸리는 주 경로
 
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
@@ -807,7 +818,7 @@ export function buildStreet(scene) {
   });
 
   // ---- 월드 API ----
-  const inside = (x, z, m) => RECTS.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
+  const inside = (x, z, m) => WALK.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
   let time = 0;
   // 가장 먼저 닫혀 있는 방벽 (앞쪽에서부터 차례로 열린다)
@@ -826,7 +837,7 @@ export function buildStreet(scene) {
       if (gt && p.z < gt.z + r) p.z = gt.z + r;
       if (inside(p.x, p.z, r)) return;
       let bx = p.x, bz = p.z, bd = Infinity;
-      for (const R of RECTS) {
+      for (const R of WALK) {
         const cx = THREE.MathUtils.clamp(p.x, R.x0 + r, R.x1 - r), cz = THREE.MathUtils.clamp(p.z, R.z0 + r, R.z1 - r);
         const d = (cx - p.x) ** 2 + (cz - p.z) ** 2;
         if (d < bd) { bd = d; bx = cx; bz = cz; }
