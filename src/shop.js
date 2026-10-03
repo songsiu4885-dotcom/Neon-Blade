@@ -98,7 +98,7 @@ export class DoctorShop {
 }
 
 // ---- 배낭: 능력치 / 장착 칩 / 보유 칩 / 아이템 + 설정 ----
-export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'high', help: true, rainFx: true, rainSound: true };
+export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'auto', help: true, rainFx: true, rainSound: true };
 
 export class Backpack {
   constructor(ctx) {
@@ -202,7 +202,7 @@ export class Backpack {
       `<label class="row">비 내리는 효과<input type="checkbox" data-k="rainFx" ${s.rainFx ? 'checked' : ''}></label>` +
       `<label class="row">빗소리<input type="checkbox" data-k="rainSound" ${s.rainSound ? 'checked' : ''}></label>` +
       `<label class="row">조작 안내 표시<input type="checkbox" data-k="help" ${s.help ? 'checked' : ''}></label>` +
-      `<label class="row">그래픽 품질<select data-k="quality"><option value="high"${s.quality === 'high' ? ' selected' : ''}>높음</option><option value="low"${s.quality === 'low' ? ' selected' : ''}>낮음 (빠름)</option></select></label>` +
+      `<label class="row">그래픽 품질<select data-k="quality"><option value="auto"${s.quality === 'auto' ? ' selected' : ''}>자동 (권장)</option><option value="high"${s.quality === 'high' ? ' selected' : ''}>높음</option><option value="mid"${s.quality === 'mid' ? ' selected' : ''}>중간</option><option value="low"${s.quality === 'low' ? ' selected' : ''}>낮음 (빠름)</option></select></label>` +
       `<div class="set-btns"><button class="btn alt" id="setRestart">처음부터</button></div>`;
     this.setEl.querySelectorAll('[data-k]').forEach((el) => {
       const ev = el.type === 'range' ? 'input' : 'change';

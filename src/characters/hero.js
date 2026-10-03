@@ -375,6 +375,7 @@ export class HeroAnimator {
     const wrist = G.clone().addScaledVector(fdir, -0.075);
     twoBone(Arm, Fore, Hand, wrist, pole);
 
+    if (R.noFingers) return; // 적은 손가락·손목 세부 계산을 생략한다 (성능)
     const mid = B[`${side}HandMiddle1`], idx = B[`${side}HandIndex1`], pky = B[`${side}HandPinky1`];
     if (!mid || !idx || !pky) return;
     const aimFingers = () => { const hp = Hand.getWorldPosition(new THREE.Vector3()); aimBone(Hand, mid, hp.addScaledVector(fdir, 0.1)); };

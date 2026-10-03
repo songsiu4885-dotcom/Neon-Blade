@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Input } from './input.js';
 import { Player } from './player.js';
 import { loadHero, buildHero, HeroAnimator } from './characters/hero.js';
-import { loadRobots } from './characters/robotModels.js';
+import { loadRobots, setLodCenter } from './characters/robotModels.js';
 import { CameraRig } from './camera.js';
 import { FX } from './fx.js';
 import { buildStreet, GATE_Z } from './levels/street.js';
@@ -390,19 +390,45 @@ function stats() {
 // ---- 설정 ----
 let settings = { ...SETTINGS_DEFAULT };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('nb_settings') || '{}')); } catch {}
+if (!settings.v2) { settings.v2 = true; if (settings.quality === 'high') settings.quality = 'auto'; } // 예전 기본값(높음)은 자동으로
+
+// ---- 자동 성능 조절: 플레이 중 프레임이 계속 낮으면 그래픽을 한 단계씩 낮춘다 ----
+const perf = { frames: 0, time: 0, warm: 0 };
+function perfTick(dt) {
+  if (settings.quality !== 'auto' || autoLevel >= 2) return;
+  const now = performance.now(), real = perf.last ? Math.min(0.5, (now - perf.last) / 1000) : 0; // 실제 경과 시간 (dt는 1/30초로 잘려 있다)
+  perf.last = now;
+  perf.warm += real;
+  if (perf.warm < 3) return; // 시작 직후(모델 로딩 등)는 무시
+  perf.frames++; perf.time += real;
+  if (perf.time < 3) return;
+  const fps = perf.frames / perf.time;
+  perf.frames = 0; perf.time = 0;
+  if (fps < 42) {
+    autoLevel++;
+    applyGraphics(autoLevel);
+    toast(`화면을 부드럽게 하려고 그래픽을 낮췄어요<small>설정 → 그래픽 품질에서 바꿀 수 있어요</small>`, 2600);
+  }
+}
 const help = $('help');
+// 그래픽 단계: 0 높음 / 1 중간(해상도↓, 구름·탐조등 끔) / 2 낮음(빛 번짐·색 보정도 끔)
+let autoLevel = 0;
+const gfxLevel = (s) => (s.quality === 'high' ? 0 : s.quality === 'mid' ? 1 : s.quality === 'low' ? 2 : autoLevel);
+function applyGraphics(level) {
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  renderer.setPixelRatio(level >= 1 ? Math.min(devicePixelRatio, 1) : Math.min(devicePixelRatio, coarse ? 1.25 : 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+  fx.resize(innerWidth, innerHeight);
+  fx.setBloom(level < 2);
+  env.setQuality?.(level >= 1); // 구름·탐조등
+}
 function applySettings(s) {
   audio.setVolumes(s.master, s.music);
   audio.setRain(s.rainSound !== false);
   env.setRain?.(s.rainFx !== false);
-  env.setQuality?.(s.quality === 'low'); // 낮음: 구름·탐조등을 끈다
   rig.sens = s.sens;
   rig.shakeMul = s.shake ? 1 : 0;
-  const coarse = matchMedia('(pointer: coarse)').matches;
-  renderer.setPixelRatio(s.quality === 'low' ? Math.min(devicePixelRatio, 1) : Math.min(devicePixelRatio, coarse ? 1.5 : 1.75));
-  renderer.setSize(innerWidth, innerHeight);
-  fx.resize(innerWidth, innerHeight);
-  fx.setBloom(s.quality !== 'low');
+  applyGraphics(gfxLevel(s));
   help.classList.toggle('off', !s.help);
   try { localStorage.setItem('nb_settings', JSON.stringify(s)); } catch {}
 }
@@ -519,6 +545,8 @@ function frame() {
   // 박사 호출은 전투가 없을 때만 (구역 정리 후 다음 전투 전까지)
   if (shop.available && (zones.state === 'fight' || player.dead)) shop.setAvailable(false);
   if (!player.dead && !zones.cleared) stageTime += dt;
+  perfTick(dt);
+  setLodCenter(camera.position);
   maxCombo = Math.max(maxCombo, combat.hits);
 
   // 붉은 방벽에 막혔을 때 안내
@@ -572,7 +600,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 frame();
-window.__game = { player, rig, combat, fx, waves: zones, zones, audio, story, env, newGame, retryZone, start: () => $('goBtn').click() };
+window.__game = { renderer, player, rig, combat, fx, waves: zones, zones, audio, story, env, newGame, retryZone, start: () => $('goBtn').click() };
 
 // 필름 그레인 (사진 같은 질감)
 {

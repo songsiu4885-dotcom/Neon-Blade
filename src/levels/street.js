@@ -899,6 +899,7 @@ export function buildStreet(scene) {
     const t = tex(c, true); return t;
   };
   let clockHands = null;
+  const roomGroups = [];
   const rooms = ROOMS.map((m, k) => {
     const X = TOWER_X, Z = m.z, H = m.half, WH = 11;
     const grp = new THREE.Group(); scene.add(grp);
@@ -921,7 +922,7 @@ export function buildStreet(scene) {
     for (const [sx, ad] of [[-1, k * 2], [1, k * 2 + 1]]) {
       const h = makeHolo(k === 4 ? 0 : ad, 11);
       h.position.set(X + sx * (H - 0.25), 6.2, Z + (sx > 0 ? -4 : 4)); h.rotation.y = -sx * Math.PI / 2;
-      scene.add(h);
+      grp.add(h);
     }
     if (m.kind === 'lobby') {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { add(new THREE.BoxGeometry(1.6, WH, 1.6), wallM, X + sx * R, WH / 2, Z + sz * R); add(new THREE.BoxGeometry(0.12, WH - 1, 0.12), neon, X + sx * (R - 0.85), WH / 2, Z + sz * (R - 0.85)); }
@@ -962,11 +963,28 @@ export function buildStreet(scene) {
       for (const sx of [-1, 1]) for (let zz = -H + 6; zz < H - 4; zz += 7) { add(new THREE.BoxGeometry(1.6, WH, 1.6), wallM, X + sx * R, WH / 2, Z + zz); add(new THREE.BoxGeometry(0.14, WH - 1, 0.14), neon, X + sx * (R - 0.9), WH / 2, Z + zz); }
     }
     const lift = k < ROOMS.length - 1 ? makePad(X, Z - H + 5, m.theme, '엘리베이터 ▲') : null;
+    roomGroups.push({ grp, z0: Z - H - 2, z1: Z + H + 2 });
     return {
       name: m.name, center: V(X, 0, Z), start: V(X, 0, Z + H - 4), lift: lift && lift.pos.clone(),
       x0: X - H + 3, x1: X + H - 3, half: H, boss: !!m.boss || m.kind === 'clock',
     };
   });
+
+  // ---- 보이는 것만 그리기: 거리에 있을 때는 타워 방을, 타워 안에서는 거리와 다른 방을 숨긴다 ----
+  const roomSet = new Set(roomGroups.map((r) => r.grp));
+  // 거리 쪽 물체를 한 묶음으로 옮긴다 (각자의 visible 값은 그대로 두고 묶음째 켜고 끈다)
+  const cityGroup = new THREE.Group();
+  for (const o of [...scene.children]) if (!roomSet.has(o) && !o.isLight && o !== atmo.group && o.position.x < 300) cityGroup.add(o);
+  scene.add(cityGroup);
+  let lastIndoor = null, lastRoom = null;
+  const cullByArea = (p) => {
+    const indoor = p.x > 300;
+    const cur = indoor ? roomGroups.find((r) => p.z > r.z0 && p.z < r.z1) || null : null;
+    if (indoor === lastIndoor && cur === lastRoom) return;
+    lastIndoor = indoor; lastRoom = cur;
+    cityGroup.visible = !indoor;
+    for (const r of roomGroups) r.grp.visible = r === cur;
+  };
 
   // ---- 월드 API ----
   const inside = (x, z, m) => WALK.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
@@ -1032,6 +1050,7 @@ export function buildStreet(scene) {
           if (g.openT >= 1) g.group.visible = false;
         }
       }
+      cullByArea(playerPos);
       const indoor = playerPos.x > 300; // 타워 안에서는 비가 오지 않는다
       rain.visible = splash.visible = !indoor && rainOn;
       atmo.update(dt, camera.position, indoor, rainOn);

@@ -3,6 +3,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { loadBuffer, twoBone, rotateWorld, HeroAnimator } from './hero.js';
 import { POSES, spline, easeInOut } from '../player.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+// 성능: 멀리 있는 적은 동작을 덜 자주 계산한다 (main이 매 프레임 카메라 위치를 알려 준다)
+const lodCenter = new THREE.Vector3();
+export function setLodCenter(v) { lodCenter.copy(v); }
 
 // 적 로봇의 실제 3D 모델 (스키닝 + 걷기/달리기 동작).
 //  android: 사람형 안드로이드 (Mixamo X Bot) — 경비병, 암살자, 사수, 집행자, 방패병, 쌍둥이
@@ -99,7 +104,7 @@ export function buildModelRobot(e, o, kind) {
     const wp = (n) => hb[n].getWorldPosition(new THREE.Vector3());
     const maxReach = wp('RightArm').distanceTo(wp('RightForeArm')) + wp('RightForeArm').distanceTo(wp('RightHand')) + 0.07;
     const fin = (side) => { const f = []; for (const x of ['Index', 'Middle', 'Ring', 'Pinky']) for (let i = 1; i <= 3; i++) if (hb[`${side}Hand${x}${i}`]) f.push(hb[`${side}Hand${x}${i}`]); return f; };
-    J.heroRig = { root, model, bones: hb, pivot, sword, scarf: [], mixer, actions, maxReach, fingers: fin('Right'), fingersL: fin('Left'), afterMixer: (dt) => applyKitPose(J, dt, e.body) };
+    J.heroRig = { root, model, bones: hb, pivot, sword, scarf: [], mixer, actions, maxReach, fingers: fin('Right'), fingersL: fin('Left'), noFingers: true, afterMixer: (dt) => applyKitPose(J, dt, e.body) };
     J.sword = sword;
   }
   mixer.update(0); // 부품은 '대기 동작' 자세에서 재고 붙인다 (원본의 기본 자세는 많이 다르다)
@@ -179,6 +184,26 @@ const KITS = {
   gate: { bones: { chest: 1.35, legs: 1.15, head: 0.78 }, parts: [['halo', 'crown', [0, -0.3, 0.1]], ['backarms', 'chest', [0, 0.45, 0.25], 2.2], ['bigpauldron', 'shL', [0, 0.08, 0], 1.4, -1], ['bigpauldron', 'shR', [0, 0.08, 0], 1.4, 1], ['horns', 'crown', [0, -0.15, -0.1], 2.4], ['chestplate', 'chest', [0, 0.1, -0.12], 1.8]] },
 };
 
+// 부품 안의 작은 메시들을 재질별로 하나로 합쳐 그리기 횟수를 줄인다 (움직이는 하위 묶음은 그대로 둔다)
+function mergeByMaterial(g) {
+  const byMat = new Map(), keep = [];
+  for (const c of g.children) {
+    if (c.isMesh && !c.userData.spin && !c.children.length) {
+      c.updateMatrix();
+      const geo = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone();
+      for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      geo.applyMatrix4(c.matrix);
+      if (!byMat.has(c.material)) byMat.set(c.material, []);
+      byMat.get(c.material).push(geo);
+    } else keep.push(c);
+  }
+  const out = new THREE.Group();
+  for (const [mat, list] of byMat) { const m = new THREE.Mesh(mergeGeometries(list), mat); m.frustumCulled = false; out.add(m); }
+  for (const c of keep) out.add(c);
+  return out;
+}
+
 function applyKit(J, e, kind, kit, mats) {
   const B = (k) => J.bones[SLOT[kind][k]];
   const bs = kit.bones || {};
@@ -219,7 +244,7 @@ function applyKit(J, e, kind, kit, mats) {
     J.parts.push({ obj, bone, rel, off: new THREE.Vector3(...off) });
     obj.traverse((c) => { if (c.userData.spin) J.spinners.push(c); });
   };
-  for (const [name, at, off, sc, sd] of kit.parts || []) attach(at, PART[name](mats, sd ?? 1), off, sc);
+  for (const [name, at, off, sc, sd] of kit.parts || []) attach(at, mergeByMaterial(PART[name](mats, sd ?? 1)), off, sc);
   // 골리앗: 어깨 위에 작은 안드로이드 조종수가 타고 있다 (두 모델을 섞는다)
   if (kit.rider && models.android) {
     const fake = { body: new THREE.Group(), std: (c) => e.std(c), rim: (c) => e.rim(c) };
@@ -275,6 +300,11 @@ export class ModelAnimator {
     _pick() { return POSES.COMBO[this.n++ % 3].keys; } // 가로베기 → 올려베기 → 내려찍기를 차례로 (연격이 자연스럽게 이어진다)
 
   update(dt, speed, armRx, state, broken) {
+    // 멀리 있는 적(30m 밖)은 초당 15번만 계산한다. 공격 중에는 항상 매 프레임
+    const far = this.e.pos.distanceToSquared(lodCenter) > 900 && state !== 'windup' && state !== 'strike';
+    this.acc = (this.acc || 0) + dt;
+    if (far && this.acc < 1 / 15) return;
+    dt = this.acc; this.acc = 0;
     if (this.ha) return this._android(dt, speed, armRx, state, broken);
     return this._heavy(dt, speed, armRx, state, broken);
   }

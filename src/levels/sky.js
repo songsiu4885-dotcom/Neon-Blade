@@ -38,7 +38,7 @@ function adTexture(ad) {
 }
 const holoMat = (map) => new THREE.ShaderMaterial({
   uniforms: { map: { value: map }, uTime: { value: 0 }, uSeed: { value: Math.random() * 100 }, uBoost: { value: 1 } },
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, fog: false,
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: `uniform sampler2D map; uniform float uTime; uniform float uSeed; uniform float uBoost; varying vec2 vUv;
     float h(float n){ return fract(sin(n)*43758.5453); }
@@ -73,16 +73,16 @@ export function buildAtmosphere(scene, { foots, hemi }) {
   // ---- 비구름: 도시 불빛을 받아 아래가 분홍·청록으로 물든 구름층 ----
   const cloudU = { uTime: { value: 0 }, uFlash: { value: 0 }, uCam: { value: new THREE.Vector2() } };
   const clouds = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200, 1, 1).rotateX(Math.PI / 2), new THREE.ShaderMaterial({
-    uniforms: cloudU, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide,
+    uniforms: cloudU, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, forceSinglePass: true,
     vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xz; gl_Position = projectionMatrix*viewMatrix*w; }',
     fragmentShader: `uniform float uTime; uniform float uFlash; uniform vec2 uCam; varying vec2 vW;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
       float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
         return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
-      float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*n(p); p*=2.03; a*=0.5; } return v; }
+      float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<3;i++){ v+=a*n(p); p*=2.03; a*=0.5; } return v + 0.12; }
       void main(){
         vec2 p = vW * 0.0035 + vec2(uTime*0.012, uTime*0.004);
-        float d = fbm(p) - 0.25 * fbm(p*3.0 + uTime*0.02);
+        float d = fbm(p) - 0.12 * n(p*3.0 + uTime*0.02);
         float a = smoothstep(0.18, 0.62, d);
         float dist = length(vW - uCam);
         float fade = 1.0 - smoothstep(700.0, 1500.0, dist);
