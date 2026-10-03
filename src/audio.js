@@ -196,6 +196,19 @@ class AudioSys {
     this._tone('sine', 110, 110, 1.6, 0.2);
   }
 
+  // ---------- 천둥: 먼 곳일수록 늦고 낮고 작게 ----------
+  thunder(dist = 500) {
+    const ctx = this.ctx; if (!ctx || this.rainOn === false) return;
+    const t = ctx.currentTime, far = Math.min(1, dist / 800);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900 - far * 600, t); lp.frequency.exponentialRampToValueAtTime(90, t + 3);
+    const g = ctx.createGain(); const v = 0.5 - far * 0.3;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.08); g.gain.exponentialRampToValueAtTime(v * 0.5, t + 0.6);
+    g.gain.exponentialRampToValueAtTime(v * 0.7, t + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx);
+    src.start(t); src.stop(t + 3.5);
+  }
+
   // ---------- 빗소리 ----------
   _rain() {
     const ctx = this.ctx;

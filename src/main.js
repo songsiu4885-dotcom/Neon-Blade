@@ -68,6 +68,8 @@ const vib = (ms) => { try { navigator.vibrate?.(ms); } catch {} };
 const story = new StoryUI($('comm'), $('cine'));
 
 let started = false;
+document.body.classList.add('title'); // 타이틀 화면에서는 전투 화면 표시를 숨긴다
+let titleT = 0;
 let stageTime = 0, maxCombo = 0, perfects = 0, execs = 0, deaths = 0;
 let slowT = 0;          // 완벽 회피 슬로모션 (실시간 초)
 let gateHintCd = 0;
@@ -111,6 +113,7 @@ function applySkin(i = 0) {
 applySkin(0);
 loadHero().then((g) => { player.useHero(buildHero(g), HeroAnimator); }).catch((e) => console.warn('hero model', e));
 loadRobots().catch((e) => console.warn('robot models', e)); // 적 로봇 모델 (못 읽으면 절차적 로봇)
+env.atmo.onThunder = (dist) => audio.thunder(dist); // 번개 뒤 천둥 (빗소리를 끄면 함께 꺼진다)
 
 // ---- 구역 정의: 거리 13구역 + 타워 5개 층 ----
 const STREET_TRIG = [-20, -72, -132, -196, -266, -346, -412, -480, -576, -676, -766, -822, -886];
@@ -270,6 +273,7 @@ player.onPerfectDodge = (hit) => {
 };
 player.onHurt = (dmg, dir) => {
   vib(45);
+  fx.impact(0.7);
   audio.hurt();
   rig.shake(0.07);
   rig.addKick(dir, 0.25);
@@ -342,6 +346,7 @@ async function newGame(withIntro = true) {
   rig.target.set(player.pos.x, 1.4, player.pos.z);
   buildPips();
   started = true;
+  document.body.classList.remove('title');
   if (withIntro) await story.play(STORY.intro, { black: true });
   zones.enabled = true;
   banner('네온 블레이드', 2000);
@@ -390,6 +395,7 @@ function applySettings(s) {
   audio.setVolumes(s.master, s.music);
   audio.setRain(s.rainSound !== false);
   env.setRain?.(s.rainFx !== false);
+  env.setQuality?.(s.quality === 'low'); // 낮음: 구름·탐조등을 끈다
   rig.sens = s.sens;
   rig.shakeMul = s.shake ? 1 : 0;
   const coarse = matchMedia('(pointer: coarse)').matches;
@@ -478,6 +484,10 @@ function frame() {
   document.body.classList.toggle('paused', paused);
   if (!started || paused) {
     input.poll();
+    if (!started) { // 타이틀: 카메라가 천천히 골목을 둘러보며 하늘의 광고판과 구름을 비춘다
+      titleT += dt;
+      rig.yaw = Math.sin(titleT * 0.07) * 0.55; rig.pitch = 0.14 + Math.sin(titleT * 0.11) * 0.06; rig.distance = 6.5;
+    }
     if (!player.dead) { player._applyPose(); player.anim.update(dt, { speed: 0, swordYaw: player.pose[1] }); } // 멈춘 동안에도 숨쉬는 대기 동작
     env.update(dt, player.pos, camera, innerHeight);
     audio.setMode(!started ? 'explore' : story.blocking ? 'quiet' : 'explore');

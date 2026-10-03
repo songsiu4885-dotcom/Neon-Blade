@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildAtmosphere, makeHolo } from './sky.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // 스테이지 1 「네온 스트리트」
@@ -218,7 +219,8 @@ export function buildStreet(scene) {
   scene.background = new THREE.Color(FOG);
   scene.fog = new THREE.FogExp2(FOG, 0.0088);
 
-  scene.add(new THREE.HemisphereLight(0x8a7f98, 0x1a120c, 1.1));
+  const hemi = new THREE.HemisphereLight(0x8a7f98, 0x1a120c, 1.1);
+  scene.add(hemi);
   const towerLight = new THREE.DirectionalLight(0xff8ad8, 0.45); towerLight.position.set(0, 60, -300); scene.add(towerLight);
   const back = new THREE.DirectionalLight(0x3fc8ff, 0.45); back.position.set(-30, 40, 120); scene.add(back);
 
@@ -437,9 +439,9 @@ export function buildStreet(scene) {
   // 건물 하나: 길을 향한 면(nx, nz)에 상점/네온/간판을 붙인다
   const foots = []; // 건물 바닥 영역 (충돌 점검용)
   function building(x0, x1, z0, z1, hr, nx, nz, style) {
-    foots.push({ x0, x1, z0, z1 });
     const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
     const h = rnd(hr[0], hr[1]);
+    foots.push({ x0, x1, z0, z1, h, nx, nz });
     const v = style ?? Math.floor(Math.random() * 3);
     const h1 = Math.random() < 0.5 ? h : h * rnd(0.55, 0.8);
     // 1층은 길 쪽으로 D만큼 파여 상점이 들어간다
@@ -595,6 +597,17 @@ export function buildStreet(scene) {
     scene.add(m);
     return m;
   };
+  // 젖은 바닥에 비친 네온: 낮은 간판 아래 길바닥에 번진 빛 (간판 색과 비슷한 네온색)
+  {
+    const refl = [];
+    for (const sg of [...vSigns, ...hSigns]) {
+      if (sg.p.y > 14 || Math.random() < 0.35) continue;
+      const nxr = Math.sin(sg.rotY ?? 0), nzr = Math.cos(sg.rotY ?? 0);
+      refl.push({ p: V(sg.p.x + nxr * 2.4, 0.035, sg.p.z + nzr * 2.4), s: V(Math.abs(nzr) * 3 + Math.abs(nxr) * 6.5, 1, Math.abs(nxr) * 3 + Math.abs(nzr) * 6.5), c: col(pick(NEON), 0.42) });
+    }
+    const rm = instanced(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: radialTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true }), refl);
+    rm.renderOrder = 1; scene.add(rm);
+  }
   const vMesh = signMesh(vSigns, vAt), hMesh = signMesh(hSigns, hAt);
   scene.add(instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }), inner));
   if (glass.length) {
@@ -701,6 +714,9 @@ export function buildStreet(scene) {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: radial, color: col(0xb48cff, 0.22), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   halo.scale.set(520, 520, 1); halo.position.set(0, 170, -60); tower.add(halo);
   scene.add(tower);
+
+  // ---- 상공 연출: 비구름, 번개, 옥상 홀로그램 광고판, 탐조등 ----
+  const atmo = buildAtmosphere(scene, { foots, hemi });
 
   // ---- 비행 차량 ----
   const CARS = 60;
@@ -901,6 +917,12 @@ export function buildStreet(scene) {
     for (let i = -H + 6; i < H - 3; i += 8) add(new THREE.BoxGeometry(H * 1.4, 0.08, 0.6), lightM, X, WH - 0.1, Z + i);
     // 방마다 다른 장식 (걸어 다니는 영역 바깥 2m 띠 안에 둔다)
     const R = H - 1.1;
+    // 양쪽 벽의 홀로그램 스크린 (아담의 선전)
+    for (const [sx, ad] of [[-1, k * 2], [1, k * 2 + 1]]) {
+      const h = makeHolo(k === 4 ? 0 : ad, 11);
+      h.position.set(X + sx * (H - 0.25), 6.2, Z + (sx > 0 ? -4 : 4)); h.rotation.y = -sx * Math.PI / 2;
+      scene.add(h);
+    }
     if (m.kind === 'lobby') {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { add(new THREE.BoxGeometry(1.6, WH, 1.6), wallM, X + sx * R, WH / 2, Z + sz * R); add(new THREE.BoxGeometry(0.12, WH - 1, 0.12), neon, X + sx * (R - 0.85), WH / 2, Z + sz * (R - 0.85)); }
       add(new THREE.TorusGeometry(5, 0.08, 6, 64).rotateX(Math.PI / 2), neon, X, WH - 1.4, Z);
@@ -955,8 +977,9 @@ export function buildStreet(scene) {
 
   return {
     start: V(0, 0, -12),
-    rooms, towerDoor: pads[0].pos.clone(), foots, WALK,
+    rooms, towerDoor: pads[0].pos.clone(), foots, WALK, atmo,
     setRain(on) { rainOn = on; },
+    setQuality(low) { atmo.low = low; },
     showPad(i, on) { if (pads[i]) pads[i].on.visible = on; },
     gates,
     curGate,
@@ -1011,6 +1034,7 @@ export function buildStreet(scene) {
       }
       const indoor = playerPos.x > 300; // 타워 안에서는 비가 오지 않는다
       rain.visible = splash.visible = !indoor && rainOn;
+      atmo.update(dt, camera.position, indoor, rainOn);
       for (const s of steam) s.visible = !indoor;
       for (const pd of pads) if (pd.on.visible) { pd.beam.material.opacity = 0.16 + 0.1 * Math.sin(time * 4); pd.beam.rotation.y += dt; }
       if (clockHands) { clockHands[0].rotation.z = -time * 0.5; clockHands[1].rotation.z = -time * 0.04; }

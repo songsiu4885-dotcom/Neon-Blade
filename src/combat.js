@@ -140,7 +140,9 @@ export class Combat {
     this.hits++;
     this.hitTimer = 2.2;
 
+    if (o.heavy) this.fx.impact(0.45);
     if (killed) {
+      this.fx.impact(0.6);
       this.onKill?.(e);
       this.fx.chunks(new THREE.Vector3(e.pos.x, e.hitY ? e.hitY - 0.1 : 1.1, e.pos.z), dir);
       this.fx.flash(0.15);
@@ -169,6 +171,7 @@ export class Combat {
     if (bossHit && !killed) { e.broken = false; e.posture = 0; e.brokenT = 0; e.stagger = 1.4; }
     else this.onKill?.(e);
     audio.execution();
+    this.fx.impact(1.2);
     this.fx.slashLine(c, dir);
     if (!bossHit || killed) this.fx.chunks(c.clone(), dir, bossHit ? 40 : 26);
     this.fx.sparks(c, dir, 30, 0xffffff);

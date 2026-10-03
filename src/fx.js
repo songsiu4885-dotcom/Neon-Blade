@@ -3,6 +3,23 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+
+// 색감 보정 + 화면 가장자리 색수차 (크게 맞으면 잠깐 강해진다)
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uCA: { value: 0.0012 }, uSat: { value: 1.12 }, uLift: { value: 0.012 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uCA; uniform float uSat; uniform float uLift; varying vec2 vUv;
+    void main(){
+      vec2 d = vUv - 0.5; float r2 = dot(d, d);
+      vec2 o = d * uCA * (0.4 + r2 * 4.0);
+      vec3 c = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(l), c, uSat);                                  // 채도 조금 올리기
+      c += uLift * vec3(0.35, 0.1, 0.6) * (1.0 - smoothstep(0.0, 0.25, l)); // 어두운 곳에 보랏빛
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+};
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 // 후처리(블룸 하나만) + 대시 잔상 + 속도선
@@ -17,7 +34,10 @@ export class FX {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.45, 0.5, 0.7);
     this.bloomOn = true;
     this.composer.addPass(this.bloom);
+    this.grade = new ShaderPass(GradeShader);
+    this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
+    this.impactT = 0;
     this.bloom.setSize(innerWidth / 2, innerHeight / 2);
 
     this._initRings();
@@ -43,7 +63,9 @@ export class FX {
     this.bloom.setSize(w / 2, h / 2);
   }
 
-  setBloom(on) { this.bloomOn = on; this.bloom.enabled = on; }
+  setBloom(on) { this.bloomOn = on; this.bloom.enabled = on; this.grade.enabled = on; }
+  // 강한 타격: 화면 가장자리가 잠깐 갈라진다 (색수차)
+  impact(a = 1) { this.impactT = Math.max(this.impactT, a); }
 
   render() {
     this.composer.render();
@@ -212,6 +234,8 @@ export class FX {
 
   update(dt, player) {
     this._updateGhosts(dt, player);
+    this.impactT = Math.max(0, this.impactT - dt * 3.5);
+    this.grade.uniforms.uCA.value = 0.0012 + this.impactT * 0.012 + (player.dashing ? 0.003 : 0);
     this.particles.update(dt);
     for (const m of this.slashes) {
       if (!m.visible) continue;
