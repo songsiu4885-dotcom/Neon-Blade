@@ -5,7 +5,7 @@ import { Assassin, Bomber, Gunner } from './enemies/extra.js';
 import { Juggernaut, TwinExec, Warden, Helix, Pylon, Gatekeeper, Adam } from './enemies/bosses.js';
 import { ZONE_WAVES, BOUNTY } from './story.js';
 
-const REG = {
+export const REG = {
   thug: Thug, drone: Drone, shield: ShieldBot, sniper: Sniper, mech: Mech, exec: Executioner, sentinel: Sentinel,
   assassin: Assassin, bomber: Bomber, gunner: Gunner,
   jugg: Juggernaut, twin: TwinExec, warden: Warden, helix: Helix, pylon: Pylon, gate: Gatekeeper, adam: Adam,

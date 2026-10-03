@@ -112,6 +112,11 @@ class AudioSys {
     else this._noise(0.14, 0.22, 'bandpass', 1300 * r, 3800 * r, { q: 1.5 });
   }
   hit(heavy = false, killed = false) {
+    // 한꺼번에 여러 마리를 맞혀도 소리는 짧은 간격으로만 (소리 노드가 수십 개씩 생기면 버벅인다)
+    const now = this.ctx?.currentTime ?? 0;
+    if (now - (this._lastHit || 0) < 0.04 && !killed) return;
+    if (killed && now - (this._lastKill || 0) < 0.06) return;
+    this._lastHit = now; if (killed) this._lastKill = now;
     const r = jit(0.1);
     if (heavy) { this._tone('sine', 110 * r, 36, 0.32, 0.75); this._noise(0.1, 0.4, 'highpass', 2500, 2500); }
     else { this._tone('sine', 170 * r, 58, 0.16, 0.5); this._noise(0.06, 0.28, 'highpass', 3200 * r, 3200 * r); }

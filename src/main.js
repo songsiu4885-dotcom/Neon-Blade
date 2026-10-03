@@ -7,7 +7,7 @@ import { CameraRig } from './camera.js';
 import { FX } from './fx.js';
 import { buildStreet, GATE_Z } from './levels/street.js';
 import { Combat } from './combat.js';
-import { Zones } from './waves.js';
+import { Zones, REG } from './waves.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
 import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
@@ -114,6 +114,23 @@ applySkin(0);
 loadHero().then((g) => { player.useHero(buildHero(g), HeroAnimator); }).catch((e) => console.warn('hero model', e));
 loadRobots().catch((e) => console.warn('robot models', e)); // 적 로봇 모델 (못 읽으면 절차적 로봇)
 env.atmo.onThunder = (dist) => audio.thunder(dist); // 번개 뒤 천둥 (빗소리를 끄면 함께 꺼진다)
+// 그래픽 미리 준비: 처음 보는 적·잔상·효과가 나올 때 셰이더를 만드느라 멈칫하지 않도록, 로딩이 끝나면 한 번에 만들어 둔다
+Promise.allSettled([loadHero(), loadRobots()]).then(async () => {
+  await new Promise((r) => setTimeout(r, 300)); // 주인공 모델이 붙을 때까지 잠깐
+  const tmp = [];
+  for (const t of ['thug', 'shield', 'exec', 'assassin', 'gunner', 'sniper', 'mech', 'bomber', 'drone', 'sentinel']) {
+    try { const e = new REG[t](0, 5000); scene.add(e.group); tmp.push(e); } catch (err) { console.warn('warmup', t, err); }
+  }
+  if (fx.ghostRig !== player.rig) fx._buildGhosts(player);
+  const fxObjs = [...fx.ghosts, ...fx.slashes, ...fx.rings, ...(fx.beams || [])];
+  const was = fxObjs.map((o) => o.visible);
+  fxObjs.forEach((o) => { o.visible = true; });
+  combat.hazards.circle(0, 5000, 1, 99, 0); combat.hazards.donut(0, 5000, 1, 2, 99, 0); combat.hazards.line(0, 5000, 0, 1, 1, 99, 0); combat.hazards.wave(0, 5000, 1, 2, 0);
+  try { await renderer.compileAsync(scene, camera); } catch { renderer.compile(scene, camera); }
+  fxObjs.forEach((o, i) => { o.visible = was[i]; });
+  combat.hazards.clear();
+  for (const e of tmp) scene.remove(e.group);
+});
 
 // ---- 구역 정의: 거리 13구역 + 타워 5개 층 ----
 const STREET_TRIG = [-20, -72, -132, -196, -266, -346, -412, -480, -576, -676, -766, -822, -886];
@@ -241,7 +258,11 @@ combat.onPop = (text, color) => {
 };
 combat.onKill = (e) => {
   vib(18);
-  if (e?.bounty) { inv.credits += e.bounty; creditsEl.animate([{ transform: 'scale(1.25)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 300 }); }
+  if (e?.bounty) {
+    inv.credits += e.bounty;
+    const now = performance.now(); // 여러 마리를 한꺼번에 쓰러뜨려도 숫자 깜빡임은 한 번만
+    if (now - (creditsEl._t || 0) > 250) { creditsEl._t = now; creditsEl.animate([{ transform: 'scale(1.25)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 300 }); }
+  }
   inv.kills++;
   const M = player.mods;
   if (player.hp < player.maxHp && M.killHeal) player.hp = Math.min(player.maxHp, player.hp + M.killHeal);
@@ -277,7 +298,7 @@ player.onHurt = (dmg, dir) => {
   audio.hurt();
   rig.shake(0.07);
   rig.addKick(dir, 0.25);
-  combat.hitstop = Math.max(combat.hitstop, 0.07);
+  combat.stop(0.07);
   fx.sparks(new THREE.Vector3(player.pos.x, 1.2, player.pos.z), dir, 14, 0xff5a4a);
   vig.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 450, easing: 'ease-out' });
 };
@@ -526,6 +547,7 @@ function frame() {
   // 히트스톱: 시뮬레이션을 거의 멈춘다 (카메라 흔들림은 실시간으로 계속)
   let simDt = dt;
   if (combat.hitstop > 0) { combat.hitstop -= dt; simDt = dt * 0.02; }
+  combat.hsCool = Math.max(0, combat.hsCool - dt); // 실제 시간으로 줄어든다
   // 완벽 회피 슬로모션: 적/탄환/파티클만 느려지고 플레이어는 정상 속도
   let eDt = simDt;
   if (slowT > 0) { slowT -= dt; eDt = simDt * 0.2; }

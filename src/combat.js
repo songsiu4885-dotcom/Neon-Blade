@@ -18,12 +18,21 @@ export class Combat {
       get world() { return this.combat.world; },
       maxAtk: 3, attackers: () => this.enemies.filter((e) => e.attacking && !e.boss).length };
     this.hitstop = 0;
+    this.hsCool = 0; // 연달아 맞히면 멈춤이 겹쳐 버벅이는 것처럼 보인다: 잠깐 동안은 아주 짧게만 멈춘다
     this.hits = 0;
     this.hitTimer = 0;
     this._v = new THREE.Vector3();
 
     this.onPop = null;
     this.onKill = null;
+  }
+
+  // 히트스톱(타격 순간 멈춤). 0.35초 안에 다시 걸리면 1/4만, 대시 중에는 더 짧게
+  stop(v) {
+    if (this.hsCool > 0) v *= 0.25;
+    if (this.ctx.player?.dashing) v = Math.min(v, 0.03);
+    this.hitstop = Math.max(this.hitstop, v);
+    this.hsCool = 0.35;
   }
 
   add(enemy) {
@@ -134,7 +143,7 @@ export class Combat {
     const c = new THREE.Vector3(e.pos.x, e.hitY ?? 1.2, e.pos.z).addScaledVector(dir, -0.4);
     this.fx.sparks(c, dir, o.sparks || 16, o.color ?? (o.heavy ? 0xff6ae8 : 0x9ff8ff));
 
-    this.hitstop = Math.max(this.hitstop, o.hs ?? 0.05);
+    this.stop(o.hs ?? 0.05);
     this.rig.shake(0.012 + (o.hs ?? 0.05) * 0.12);
     this.rig.addKick(dir, o.heavy ? 0.22 : 0.1);
     this.hits++;
@@ -146,7 +155,7 @@ export class Combat {
       this.onKill?.(e);
       this.fx.chunks(new THREE.Vector3(e.pos.x, e.hitY ? e.hitY - 0.1 : 1.1, e.pos.z), dir);
       this.fx.flash(0.15);
-      this.hitstop = Math.max(this.hitstop, 0.13);
+      this.stop(0.13);
       this.rig.shake(0.05);
       this.rig.addKick(dir, 0.25);
     } else if (o.posture && e.addPosture?.(o.posture)) {
@@ -158,7 +167,7 @@ export class Combat {
   _broken(e) {
     audio.broke();
     this.fx.sparks(new THREE.Vector3(e.pos.x, (e.hitY ?? 1.2) + 0.3, e.pos.z), new THREE.Vector3(0, 1, 0), 24, 0xffc400);
-    this.hitstop = Math.max(this.hitstop, 0.12);
+    this.stop(0.12);
     this.rig.shake(0.03);
     this.onPop?.('BREAK', '#ffc400');
   }
@@ -176,7 +185,7 @@ export class Combat {
     if (!bossHit || killed) this.fx.chunks(c.clone(), dir, bossHit ? 40 : 26);
     this.fx.sparks(c, dir, 30, 0xffffff);
     this.fx.flash(0.3);
-    this.hitstop = Math.max(this.hitstop, 0.22);
+    this.stop(0.22);
     this.rig.shake(0.05);
     this.rig.addKick(dir, 0.4);
     this.hits++;
@@ -202,6 +211,7 @@ export class Combat {
 
   update(dt, player) {
     this.ctx.player = player;
+    this.hsCool = Math.max(0, this.hsCool - dt);
     for (const e of this.enemies) e.update(dt, this.ctx);
     for (const e of this.enemies) { // 공격 예고가 시작되는 순간 경고음
       if (e.attacking && !e._wasAtk && e.alive) audio.warn();
