@@ -31,7 +31,7 @@ export class Assassin extends Enemy {
     super({ maxHp: 70, radius: 0.6, maxPosture: 40 });
     this.pos.set(x, 0, z);
     this.state = 'stalk'; this.t = 0; this.cd = 1.4 + Math.random() * 1.2; this.orbit = Math.random() < 0.5 ? 1 : -1;
-    this.J = buildGuardRobot(this, { shell: 0x1e1630, rim: 0xc05cff, vent: 0xc05cff, weapon: 'sword' });
+    this.J = buildGuardRobot(this, { kit: 'assassin', shell: 0x1e1630, rim: 0xc05cff, vent: 0xc05cff, weapon: 'sword' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.set(0.8, 0.95, 0.8);
     this.armRx = 0.25;
@@ -115,7 +115,7 @@ export class Bomber extends Enemy {
     this.pos.set(x, 0, z);
     this.state = 'chase'; this.t = 0; this.speed = 7.2;
     if (robotsReady()) { // 작은 로봇이 달려와 붙는다
-      this.J = buildGuardRobot(this, { body: 'heavy', size: 0.55, shell: 0x6a4420, dark: 0x1a1410, rim: 0xff4020, weapon: 'none' });
+      this.J = buildGuardRobot(this, { kit: 'bomber', accent: 0xffc400, body: 'heavy', size: 0.55, shell: 0x6a4420, dark: 0x1a1410, rim: 0xff4020, weapon: 'none' });
       this.anim = new GuardAnimator(this.J);
       this.ball = new THREE.Group(); this._last = V3(x, 0, z);
     } else {
@@ -181,7 +181,7 @@ export class Gunner extends Enemy {
     this.pos.set(x, 0, z);
     this.state = 'hover'; this.t = 0; this.cd = 1.6 + Math.random() * 1.4;
     this.strafe = Math.random() < 0.5 ? 1 : -1; this.strafeT = 2;
-    this.J = buildGuardRobot(this, { shell: 0x4a4430, rim: 0xffb020, vent: 0xffb020, weapon: 'rifle' });
+    this.J = buildGuardRobot(this, { kit: 'gunner', shell: 0x4a4430, rim: 0xffb020, vent: 0xffb020, weapon: 'rifle' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.12);
     this.aim = laser();

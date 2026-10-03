@@ -31,7 +31,7 @@ export class ShieldBot extends Enemy {
     this.pos.set(x, 0, z);
     this.guards = true;
     this.state = 'chase'; this.t = 0; this.cd = 1 + Math.random();
-    this.J = buildGuardRobot(this, { shell: 0x4a5470, rim: 0x00e5ff, vent: 0x00e5ff, weapon: 'none', shield: true });
+    this.J = buildGuardRobot(this, { kit: 'shield', shell: 0x4a5470, rim: 0x00e5ff, vent: 0x00e5ff, weapon: 'none', shield: true });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.08);
     this.warn = rectWarn(2.8, 3.2, -1.8); this.group.add(this.warn);
@@ -88,7 +88,7 @@ export class Sniper extends Enemy {
     this.pos.set(x, 0, z);
     this.state = 'hover'; this.t = 0; this.cd = 1.5 + Math.random() * 2;
     this.strafe = Math.random() < 0.5 ? 1 : -1; this.strafeT = 2;
-    this.J = buildGuardRobot(this, { shell: 0x2c3150, rim: 0xff3b30, vent: 0xff3b30, weapon: 'rifle' });
+    this.J = buildGuardRobot(this, { kit: 'sniper', shell: 0x2c3150, rim: 0xff3b30, vent: 0xff3b30, weapon: 'rifle' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.set(0.82, 0.92, 0.82);
     this.aim = laser();
@@ -149,7 +149,7 @@ export class Mech extends Enemy {
     super({ maxHp: 150, radius: 1.0, maxPosture: 75 });
     this.pos.set(x, 0, z);
     this.state = 'chase'; this.t = 0; this.cd = 1.5 + Math.random() * 1.5;
-    this.J = buildGuardRobot(this, { body: 'heavy', shell: 0x5a4a30, rim: 0xffb347, vent: 0xffb347, weapon: 'none' });
+    this.J = buildGuardRobot(this, { kit: 'mech', body: 'heavy', shell: 0x5a4a30, rim: 0xffb347, vent: 0xffb347, weapon: 'none' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.28);
     // 머리 위 뿔 (돌진 형상)
@@ -225,7 +225,7 @@ export class Executioner extends Enemy {
     this.elite = true;
     this.pos.set(x, 0, z);
     this.state = 'chase'; this.t = 0; this.cd = 1.2; this.stepI = 0; this.phase = 'wind';
-    this.J = buildGuardRobot(this, { shell: 0x3a1822, rim: 0xff2848, vent: 0xff2848, weapon: 'sword' });
+    this.J = buildGuardRobot(this, { kit: 'exec', shell: 0x3a1822, rim: 0xff2848, vent: 0xff2848, weapon: 'sword' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.3);
     this.warn = rectWarn(4.4, 4.4, -2.4); this.group.add(this.warn);

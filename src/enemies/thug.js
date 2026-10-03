@@ -17,7 +17,7 @@ export class Thug extends Enemy {
     this.speed = 5.0;
     this.dmg = 13;
 
-    this.J = buildGuardRobot(this);
+    this.J = buildGuardRobot(this, { kit: 'thug' });
     this.anim = new GuardAnimator(this.J);
     this.arm = this.J.shoulderR;
     this.armRx = 0.25;

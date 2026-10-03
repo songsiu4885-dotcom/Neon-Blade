@@ -59,7 +59,7 @@ export function buildModelRobot(e, o, kind) {
     m.frustumCulled = false;
     const n = m.material.name;
     if (kind === 'android') m.material = /Joints/i.test(n) || /Joints/i.test(m.name) ? glow : shell;
-    else m.material = n === 'Main' ? shell : n === 'Black' ? glow : dark;
+    else m.material = n === 'Main' ? shell : n === 'Black' ? (KITS[o.kit]?.coverEyes ? dark : glow) : dark; // 큰 눈을 덮는 키트면 눈을 어둡게
   });
   // 키 맞추기
   model.updateMatrixWorld(true);
@@ -76,7 +76,9 @@ export function buildModelRobot(e, o, kind) {
     actions[k] = mixer.clipAction(clip); actions[k].play(); actions[k].setEffectiveWeight(k === 'idle' ? 1 : 0);
     actions[k].time = Math.random() * clip.duration; // 여럿이 똑같이 움직이지 않게
   }
-  const b = (n) => bones[n];
+  // 같은 이름의 메시가 있으면 로더가 뼈 이름 뒤에 _1을 붙인다 (Torso → Torso_1)
+  const b = (n) => bones[n] || Object.values(bones).find((x) => x.name.startsWith(n + '_'));
+  for (const n of [...Object.values(RIG[kind]).flat(), ...Object.values(SLOT[kind])]) if (typeof n === 'string' && !bones[n]) { const x = b(n); if (x) bones[n] = x; }
   const J = {
     isModel: true, kind, model, root, mixer, actions, bones, R,
     hips: b(R.hips), spine: b(R.spine), chest: b(R.chest),
@@ -84,9 +86,155 @@ export function buildModelRobot(e, o, kind) {
     // GuardRobot과 이름을 맞춘 자리표시 (다른 코드가 rotation을 써도 문제없게)
     shoulderR: new THREE.Object3D(), shoulderL: new THREE.Object3D(), elbowR: new THREE.Object3D(), elbowL: new THREE.Object3D(),
     torso: new THREE.Object3D(), head: new THREE.Object3D(), pelvis: new THREE.Object3D(),
-    weapons: [],
+    weapons: [], boneScale: [], spinners: [], riders: [], parts: [],
   };
+  mixer.update(0); // 부품은 '대기 동작' 자세에서 재고 붙인다 (원본의 기본 자세는 많이 다르다)
+  if (o.kit) applyKit(J, e, kind, KITS[o.kit] || {}, { shell, dark, glow, accent: e.rim(o.accent ?? o.rim ?? 0xff2bd6), metal: e.std(o.metal ?? 0x8a8f9c) });
   return J;
+}
+
+// ================= 부품 조합 (키트) =================
+// 뼈 이름 (모델별). 부품은 '쉬는 자세에서 몸 기준 좌표'로 붙고, 그 뒤로는 뼈를 따라 움직인다.
+const SLOT = {
+  android: { head: 'mixamorigHead', neck: 'mixamorigNeck', chest: 'mixamorigSpine2', hips: 'mixamorigHips',
+    shL: 'mixamorigLeftArm', shR: 'mixamorigRightArm', foreL: 'mixamorigLeftForeArm', foreR: 'mixamorigRightForeArm',
+    legL: 'mixamorigLeftUpLeg', legR: 'mixamorigRightUpLeg', shinL: 'mixamorigLeftLeg', shinR: 'mixamorigRightLeg' },
+  heavy: { head: 'Head', neck: 'Neck', chest: 'Torso', hips: 'Hips', shL: 'UpperArmL', shR: 'UpperArmR', foreL: 'LowerArmL', foreR: 'LowerArmR',
+    legL: 'UpperLegL', legR: 'UpperLegR', shinL: 'LowerLegL', shinR: 'LowerLegR' },
+};
+const M = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m; };
+const G = (...kids) => { const g = new THREE.Group(); for (const k of kids) g.add(k); return g; };
+
+// 부품 모양 (몸 기준: x 오른쪽, y 위, -z 정면). 크기는 미터.
+const PART = {
+  helmet: (m) => G(M(new THREE.SphereGeometry(0.15, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), m.shell, 0, 0.02, 0.01),
+    M(new THREE.BoxGeometry(0.22, 0.04, 0.05), m.glow, 0, 0.0, -0.13)),
+  monoeye: (m) => G(M(new THREE.BoxGeometry(0.2, 0.2, 0.22), m.dark, 0, 0, 0), M(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 16).rotateX(Math.PI / 2), m.glow, 0, 0.01, -0.12),
+    M(new THREE.TorusGeometry(0.075, 0.012, 6, 18), m.metal, 0, 0.01, -0.12)),
+  crest: (m) => G(M(new THREE.BoxGeometry(0.025, 0.2, 0.32), m.glow, 0, 0.17, 0.03), M(new THREE.BoxGeometry(0.04, 0.08, 0.36), m.dark, 0, 0.09, 0.03)),
+  horns: (m) => G(...[-1, 1].map((sd) => { const c = M(new THREE.ConeGeometry(0.04, 0.3, 8), m.metal, sd * 0.11, 0.14, 0.02); c.rotation.z = -sd * 0.5; c.rotation.x = 0.3; return c; })),
+  antenna: (m) => G(M(new THREE.CylinderGeometry(0.008, 0.012, 0.42, 5), m.dark, 0.08, 0.26, 0.04), M(new THREE.SphereGeometry(0.025, 8, 6), m.glow, 0.08, 0.48, 0.04)),
+  scope: (m) => G(M(new THREE.CylinderGeometry(0.04, 0.05, 0.26, 10).rotateX(Math.PI / 2), m.dark, 0.09, 0.03, -0.1), M(new THREE.CircleGeometry(0.035, 12), m.glow, 0.09, 0.03, -0.235)),
+  pauldron: (m, sd) => G(M(new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), m.shell, sd * 0.03, 0.03, 0), M(new THREE.BoxGeometry(0.03, 0.02, 0.2), m.glow, sd * 0.1, 0.07, 0)),
+  spikes: (m, sd) => G(...[0, 1, 2].map((i) => { const c = M(new THREE.ConeGeometry(0.035, 0.2, 6), m.metal, sd * (0.03 + i * 0.03), 0.12 + i * 0.02, -0.06 + i * 0.06); c.rotation.z = -sd * (0.4 + i * 0.15); return c; })),
+  chestplate: (m) => G(M(new THREE.BoxGeometry(0.34, 0.26, 0.06), m.shell, 0, 0.02, -0.14), M(new THREE.BoxGeometry(0.2, 0.025, 0.07), m.glow, 0, 0.07, -0.15), M(new THREE.BoxGeometry(0.2, 0.025, 0.07), m.glow, 0, -0.02, -0.15)),
+  backpack: (m) => G(M(new THREE.BoxGeometry(0.3, 0.36, 0.16), m.dark, 0, 0.0, 0.18), M(new THREE.BoxGeometry(0.04, 0.28, 0.02), m.glow, -0.08, 0, 0.27), M(new THREE.BoxGeometry(0.04, 0.28, 0.02), m.glow, 0.08, 0, 0.27)),
+  ammo: (m) => G(M(new THREE.BoxGeometry(0.34, 0.26, 0.2), m.dark, 0, -0.02, 0.2), ...[-1, 1].map((sd) => M(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 10), m.metal, sd * 0.2, 0.0, 0.2))),
+  cape: (m) => { const c = M(new THREE.PlaneGeometry(0.42, 0.9, 1, 4).translate(0, -0.45, 0), new THREE.MeshStandardMaterial({ color: 0x14080c, roughness: 0.9, side: THREE.DoubleSide }), 0, 0.12, 0.16); c.rotation.x = 0.18; return G(c); },
+  kneepad: (m) => G(M(new THREE.BoxGeometry(0.12, 0.14, 0.06), m.shell, 0, -0.02, -0.08)),
+  bracer: (m) => G(M(new THREE.CylinderGeometry(0.06, 0.055, 0.18, 10), m.shell, 0, 0.12, 0), M(new THREE.TorusGeometry(0.06, 0.008, 6, 14).rotateX(Math.PI / 2), m.glow, 0, 0.18, 0)),
+  // ---- 중장 로봇용 (머리가 크다) ----
+  faceplate: (m) => G(M(new THREE.BoxGeometry(0.62, 0.3, 0.08), m.dark, 0, 0.0, -0.33), M(new THREE.BoxGeometry(0.46, 0.05, 0.09), m.glow, 0, 0.03, -0.34)),
+  eyecluster: (m) => G(M(new THREE.BoxGeometry(0.64, 0.34, 0.08), m.dark, 0, 0, -0.33),
+    ...[[-0.18, 0.07, 0.06], [0, 0.09, 0.08], [0.18, 0.07, 0.06], [-0.1, -0.06, 0.045], [0.1, -0.06, 0.045]].map(([x, y, r]) => M(new THREE.SphereGeometry(r, 10, 8), m.glow, x, y, -0.38))),
+  furnace: (m) => G(M(new THREE.BoxGeometry(0.6, 0.55, 0.36), m.dark, 0, 0.05, 0.36), M(new THREE.BoxGeometry(0.44, 0.3, 0.02), m.accent, 0, 0.02, 0.55),
+    ...[-1, 1].map((sd) => M(new THREE.CylinderGeometry(0.07, 0.09, 0.6, 10), m.metal, sd * 0.2, 0.5, 0.4))),
+  bigpauldron: (m, sd) => G(M(new THREE.BoxGeometry(0.36, 0.14, 0.4), m.shell, sd * 0.06, 0.12, 0), M(new THREE.BoxGeometry(0.3, 0.03, 0.03), m.glow, sd * 0.06, 0.2, -0.2),
+    ...[0, 1].map((i) => { const c = M(new THREE.ConeGeometry(0.05, 0.24, 6), m.metal, sd * (0.02 + i * 0.12), 0.27, -0.06 + i * 0.12); c.rotation.z = -sd * 0.3; return c; })),
+  halo: (m) => { const g = G(M(new THREE.TorusGeometry(0.45, 0.025, 6, 40), m.glow, 0, 0, 0)); for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; g.add(M(new THREE.ConeGeometry(0.04, 0.16, 5), m.metal, Math.cos(a) * 0.45, Math.sin(a) * 0.45, 0)).rotation.z = a - Math.PI / 2; } g.position.set(0, 0.45, 0.25); return G(g); },
+  backarms: (m) => { // 등에서 뻗은 보조 팔 넷 (헤카톤: '백 개의 팔')
+    const g = G();
+    for (let i = 0; i < 4; i++) {
+      const sd = i % 2 ? 1 : -1, up = i < 2 ? 1 : -1;
+      const a = G(M(new THREE.BoxGeometry(0.1, 0.1, 0.55), m.dark, 0, 0, 0.27), M(new THREE.BoxGeometry(0.08, 0.5, 0.08), m.shell, 0, 0.25 * up, 0.55),
+        M(new THREE.ConeGeometry(0.07, 0.22, 6), m.accent, 0, 0.55 * up, 0.55));
+      a.children[2].rotation.x = up > 0 ? 0 : Math.PI;
+      a.position.set(sd * 0.2, 0.08 * up, 0.25); a.rotation.y = sd * 0.9; a.rotation.z = up * sd * 0.25;
+      a.userData.spin = { axis: 'z', base: a.rotation.z, amp: 0.25, f: 1.2 + i * 0.3 };
+      g.add(a);
+    }
+    return g;
+  },
+  stripes: (m) => G(...[-0.12, 0, 0.12].map((x) => { const b = M(new THREE.BoxGeometry(0.06, 0.3, 0.04), m.accent, x, 0, -0.3); b.rotation.z = 0.5; return b; })),
+  bomb: (m) => G(M(new THREE.SphereGeometry(0.22, 14, 10), m.dark, 0, 0.1, 0.32), M(new THREE.TorusGeometry(0.22, 0.03, 6, 20), m.accent, 0, 0.1, 0.32), M(new THREE.SphereGeometry(0.05, 8, 6), m.glow, 0, 0.36, 0.32)),
+};
+
+// 적 종류별 조합. bones: 부위 크기, hideHead: 원래 머리를 숨기고 parts의 head로 바꿔 끼움
+// parts: [부품, 붙일 뼈, [x,y,z] 뼈 기준 오프셋, 크기]
+const KITS = {
+  thug: { bones: { chest: 1.08 }, parts: [['helmet', 'head', [0, 0.1, 0]], ['pauldron', 'shL', [0, 0.02, 0], 1, -1], ['pauldron', 'shR', [0, 0.02, 0], 1, 1], ['kneepad', 'shinL', [0, 0.02, 0]], ['kneepad', 'shinR', [0, 0.02, 0]]] },
+  shield: { bones: { chest: 1.2, armL: 1.1, armR: 1.1 }, parts: [['monoeye', 'head', [0, 0.1, 0], 1.15], ['bigpauldron', 'shL', [0, 0, 0], 0.7, -1], ['bigpauldron', 'shR', [0, 0, 0], 0.7, 1], ['chestplate', 'chest', [0, 0.05, 0], 1.1]], hideHead: true },
+  exec: { bones: { chest: 1.18, armR: 1.15, armL: 1.1 }, parts: [['helmet', 'head', [0, 0.1, 0]], ['horns', 'head', [0, 0.1, 0], 1.2], ['spikes', 'shL', [0, 0, 0], 1, -1], ['spikes', 'shR', [0, 0, 0], 1, 1], ['cape', 'chest', [0, 0.05, 0]], ['bracer', 'foreR', [0, 0, 0]]] },
+  assassin: { bones: { chest: 0.88, legs: 1.06, head: 0.9 }, parts: [['crest', 'head', [0, 0.08, 0]], ['bracer', 'foreL', [0, 0, 0]], ['bracer', 'foreR', [0, 0, 0]]] },
+  gunner: { bones: { chest: 1.12 }, parts: [['monoeye', 'head', [0, 0.1, 0]], ['ammo', 'chest', [0, 0, 0]], ['pauldron', 'shL', [0, 0.02, 0], 1.2, -1], ['chestplate', 'chest', [0, 0.04, 0]]], hideHead: true },
+  sniper: { bones: { legs: 1.08, chest: 0.95 }, parts: [['helmet', 'head', [0, 0.1, 0]], ['scope', 'head', [0, 0.1, 0]], ['antenna', 'head', [0, 0.1, 0]], ['backpack', 'chest', [0, 0, 0], 0.8]] },
+  twin: { bones: { chest: 1.15, armR: 1.12, legs: 1.05 }, parts: [['monoeye', 'head', [0, 0.11, 0], 1.2], ['crest', 'head', [0, 0.12, 0], 0.9], ['horns', 'head', [0, 0.1, 0], 1.4], ['bigpauldron', 'shL', [0, 0, 0], 0.75, -1], ['bigpauldron', 'shR', [0, 0, 0], 0.75, 1], ['cape', 'chest', [0, 0.06, 0], 1.3], ['bracer', 'foreR', [0, 0, 0], 1.2], ['bracer', 'foreL', [0, 0, 0], 1.2]], hideHead: true },
+  mech: { parts: [ ['bigpauldron', 'shL', [0, 0.05, 0], 1, -1], ['bigpauldron', 'shR', [0, 0.05, 0], 1, 1], ['backpack', 'chest', [0, 0.1, 0.1], 1.4]] },
+  bomber: { bones: { head: 0.85 }, parts: [ ['bomb', 'chest', [0, 0.1, 0.05], 1.4], ['stripes', 'chest', [0, 0.05, 0]]] },
+  jugg: { bones: { armL: 1.5, armR: 1.6, head: 0.72, chest: 1.25 }, parts: [['furnace', 'chest', [0, 0.35, 0.15], 1.8], ['bigpauldron', 'shL', [0, 0.08, 0], 1.5, -1], ['bigpauldron', 'shR', [0, 0.08, 0], 1.5, 1], ['stripes', 'chest', [0, 0.1, -0.1], 1.4], ['bracer', 'foreL', [0, 0, 0], 2], ['bracer', 'foreR', [0, 0, 0], 2]], rider: true },
+  gate: { bones: { chest: 1.35, legs: 1.15, head: 0.78 }, parts: [['halo', 'crown', [0, -0.3, 0.1]], ['backarms', 'chest', [0, 0.45, 0.25], 2.2], ['bigpauldron', 'shL', [0, 0.08, 0], 1.4, -1], ['bigpauldron', 'shR', [0, 0.08, 0], 1.4, 1], ['horns', 'crown', [0, -0.15, -0.1], 2.4], ['chestplate', 'chest', [0, 0.1, -0.12], 1.8]] },
+};
+
+function applyKit(J, e, kind, kit, mats) {
+  const B = (k) => J.bones[SLOT[kind][k]];
+  const bs = kit.bones || {};
+  const push = (key, v) => { const b = B(key); if (b && v !== 1) J.boneScale.push([b, v]); };
+  if (bs.chest) push('chest', bs.chest);
+  if (bs.head || kit.hideHead) push('head', kit.hideHead ? 0.55 : bs.head);
+  if (bs.armL) push('shL', bs.armL);
+  if (bs.armR) push('shR', bs.armR);
+  if (bs.legs) { push('legL', bs.legs); push('legR', bs.legs); }
+  applyKitPose(J, 0); // 부위 크기를 먼저 적용한 뒤에 잰다
+  e.body.updateWorldMatrix(true, true); // 몸·모델·뼈의 월드 행렬을 모두 최신으로 (안 하면 스폰 위치만큼 어긋난다)
+  const bodyQ = e.body.getWorldQuaternion(new THREE.Quaternion());
+  // 중장 로봇: 머리 메시의 실제 크기와 앞면 위치를 재서 얼굴 부품('face')을 정확히 얹는다
+  let face = null;
+  if (kind === 'heavy') {
+    const hm = B('head')?.children.find((c) => !c.isBone && (c.isMesh || c.children.some((k) => k.isMesh))); // 머리 뼈에 붙은 머리 메시 묶음
+    if (hm) {
+      const box = new THREE.Box3().setFromObject(hm);
+      const lo = e.body.worldToLocal(box.min.clone()), hi = e.body.worldToLocal(box.max.clone());
+      const hb = e.body.worldToLocal(B('head').getWorldPosition(new THREE.Vector3()));
+      face = { off: [(lo.x + hi.x) / 2 - hb.x, (lo.y + hi.y) / 2 - hb.y, Math.min(lo.z, hi.z) - hb.z], w: Math.abs(hi.x - lo.x), back: Math.max(lo.z, hi.z) - hb.z, top: Math.max(lo.y, hi.y) - hb.y };
+    }
+  }
+  const attach = (boneKey, obj, off, scale) => {
+    if (boneKey === 'face' || boneKey === 'crown') { // 얼굴 앞면 / 머리 꼭대기 기준
+      if (!face) return;
+      const k = (face.w / 0.7) * 0.62;
+      off = boneKey === 'face' ? [face.off[0] + off[0], face.off[1] + off[1], face.off[2] + 0.31 * k + off[2]] : [face.off[0] + off[0], face.top + off[1], (face.off[2] + face.back) / 2 + off[2]];
+      scale = (scale ?? 1) * k; boneKey = 'head';
+    }
+    const bone = B(boneKey);
+    if (!bone) return;
+    // 뼈 크기(애니메이션이 바꿀 수 있다)는 따르지 않고, 위치와 회전만 따라간다
+    const wq = bone.getWorldQuaternion(new THREE.Quaternion());
+    const rel = wq.invert().multiply(bodyQ);
+    obj.scale.setScalar(scale ?? 1);
+    e.body.add(obj);
+    J.parts.push({ obj, bone, rel, off: new THREE.Vector3(...off) });
+    obj.traverse((c) => { if (c.userData.spin) J.spinners.push(c); });
+  };
+  for (const [name, at, off, sc, sd] of kit.parts || []) attach(at, PART[name](mats, sd ?? 1), off, sc);
+  // 골리앗: 어깨 위에 작은 안드로이드 조종수가 타고 있다 (두 모델을 섞는다)
+  if (kit.rider && models.android) {
+    const fake = { body: new THREE.Group(), std: (c) => e.std(c), rim: (c) => e.rim(c) };
+    const RJ = buildModelRobot(fake, { shell: 0x2a2c34, rim: mats.glow.color.getHex(), kit: 'thug' }, 'android');
+    attach('crown', fake.body, [0, -0.08, 0.05], 0.3); // 머리 꼭대기에 올라탄 조종수
+    RJ.body = fake.body;
+    J.riders.push(RJ);
+  }
+}
+
+const _p = new THREE.Vector3(), _wq = new THREE.Quaternion(), _bq = new THREE.Quaternion();
+// 매 프레임: 동작 재생 뒤 부위 크기와 장식 움직임을 적용
+export function applyKitPose(J, dt, body) {
+  for (const [b, v] of J.boneScale) b.scale.copy(b.userData.s0 ||= b.scale.clone()).multiplyScalar(v); // 쉬는 자세 크기 × 배율
+  if (J.parts.length && body) {
+    body.updateMatrixWorld(true);
+    body.getWorldQuaternion(_bq).invert();
+    for (const P of J.parts) {
+      P.bone.getWorldPosition(_p); P.bone.getWorldQuaternion(_wq).multiply(P.rel); // 부품의 월드 회전
+      _p.add(P.off.clone().applyQuaternion(_wq));
+      body.worldToLocal(P.obj.position.copy(_p));
+      P.obj.quaternion.copy(_bq).multiply(_wq);
+    }
+  }
+  if (J.spinners.length) {
+    const t = performance.now() / 1000;
+    for (const c of J.spinners) { const s = c.userData.spin; c.rotation[s.axis] = s.base + Math.sin(t * s.f) * s.amp; }
+  }
+  for (const R of J.riders) { R.mixer.update(dt); applyKitPose(R, dt, R.body); }
 }
 
 // 손에 쥐는 무기: 매 프레임 손 위치에, 팔뚝 방향으로 이어지게 놓는다. axis는 무기 모양이 뻗은 방향(무기 기준)
@@ -107,6 +255,7 @@ export class ModelAnimator {
     if (J.actions.walk) J.actions.walk.timeScale = THREE.MathUtils.clamp(speed / R.walkRef, 0.6, 1.8);
     if (J.actions.run) J.actions.run.timeScale = THREE.MathUtils.clamp(speed / R.runRef, 0.8, 1.6);
     J.mixer.update(dt);
+    applyKitPose(J, dt, this.e.body);
     this.e.body.updateMatrixWorld(true);
 
     const body = this.e.body;

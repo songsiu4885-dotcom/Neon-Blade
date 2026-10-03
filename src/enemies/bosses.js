@@ -309,7 +309,7 @@ export class Juggernaut extends MaulBoss {
   constructor(x, z) {
     super(x, z, {
       key: 'jugg', name: '파쇄기 골리앗', hp: 1400, posture: 340, exec: 240, radius: 1.6, scale: 1.95, walk: 4.2,
-      look: { body: 'heavy', shell: 0x6a5a40, rim: 0xff7a20, vent: 0xffb347, weapon: 'maul' },
+      look: { kit: 'jugg', accent: 0xff5a10, body: 'heavy', shell: 0x6a5a40, rim: 0xff7a20, vent: 0xffb347, weapon: 'maul' },
       dmg: { slam: 24, sweep: 22, rush: 28, wave: 18, pillar: 18, shot: 9 },
       summons: { 1: ['bomber', 'bomber'], 2: ['bomber', 'bomber', 'bomber', 'thug', 'thug'], 3: ['bomber', 'bomber', 'shield', 'shield', 'thug'] },
     });
@@ -325,7 +325,7 @@ export class Gatekeeper extends MaulBoss {
   constructor(x, z) {
     super(x, z, {
       key: 'gate', name: '타워 수문장 헤카톤', hp: 1800, posture: 380, exec: 260, radius: 1.7, scale: 2.1, walk: 4.4,
-      look: { body: 'heavy', shell: 0x2a2038, dark: 0x3a3450, rim: 0xff2bd6, vent: 0x00e5ff, weapon: 'maul' },
+      look: { kit: 'gate', accent: 0x00e5ff, body: 'heavy', shell: 0x2a2038, dark: 0x3a3450, rim: 0xff2bd6, vent: 0x00e5ff, weapon: 'maul' },
       dmg: { slam: 26, sweep: 24, rush: 30, wave: 20, pillar: 20, shot: 10 },
       summons: { 1: ['thug', 'thug', 'thug'], 2: ['shield', 'shield', 'thug', 'thug', 'drone', 'drone'], 3: ['exec', 'drone', 'drone', 'gunner', 'gunner'] },
     });
@@ -351,7 +351,7 @@ export class TwinExec extends ScriptBoss {
     });
     if (second) { this.mate = TwinExec.last; TwinExec.last.mate = this; }
     TwinExec.last = this;
-    this.J = buildGuardRobot(this, { shell: 0x3a1822, rim: second ? 0xff2bd6 : 0xff2848, vent: second ? 0xff2bd6 : 0xff2848, weapon: 'sword' });
+    this.J = buildGuardRobot(this, { kit: 'twin', shell: second ? 0x2a1030 : 0x3a1822, metal: 0xc8a050, rim: second ? 0xff2bd6 : 0xff2848, vent: second ? 0xff2bd6 : 0xff2848, weapon: 'sword' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.45);
     this.warn = this.localWarn(rectWarn(4.4, 4.4, -2.4));
