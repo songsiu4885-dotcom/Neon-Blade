@@ -268,6 +268,7 @@ export class HeroAnimator {
     R.actions.walk.timeScale = clamp(speed / 1.8, 0.6, 1.6);
     R.actions.run.timeScale = clamp(speed / 7, 0.85, 1.45);
     R.mixer.update(s.dashing ? dt * 0.15 : dt);
+    R.afterMixer?.(dt); // 적 안드로이드: 부위 크기 등 동작 뒤 처리
 
     W.atk += ((s.attacking ? 1 : 0) - W.atk) * (1 - Math.exp(-(s.attacking ? 26 : 8) * dt));
     W.dash += ((s.dashing ? 1 : 0) - W.dash) * (1 - Math.exp(-(s.dashing ? 32 : 7) * dt));

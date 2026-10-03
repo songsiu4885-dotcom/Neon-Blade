@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { loadBuffer, twoBone, rotateWorld } from './hero.js';
+import { loadBuffer, twoBone, rotateWorld, HeroAnimator } from './hero.js';
+import { POSES, spline, easeInOut } from '../player.js';
 
 // 적 로봇의 실제 3D 모델 (스키닝 + 걷기/달리기 동작).
 //  android: 사람형 안드로이드 (Mixamo X Bot) — 경비병, 암살자, 사수, 집행자, 방패병, 쌍둥이
@@ -88,6 +89,19 @@ export function buildModelRobot(e, o, kind) {
     torso: new THREE.Object3D(), head: new THREE.Object3D(), pelvis: new THREE.Object3D(),
     weapons: [], boneScale: [], spinners: [], riders: [], parts: [],
   };
+  // 안드로이드는 주인공과 같은 뼈대라 주인공의 칼 동작 체계(HeroAnimator)를 그대로 쓴다
+  if (kind === 'android') {
+    const hb = {};
+    for (const [n, bn] of Object.entries(bones)) hb[n.replace('mixamorig', '')] = bn;
+    const pivot = new THREE.Group(); pivot.rotation.order = 'YXZ'; root.add(pivot);
+    const sword = new THREE.Group(); sword.position.y = 0.52; pivot.add(sword);
+    model.updateMatrixWorld(true);
+    const wp = (n) => hb[n].getWorldPosition(new THREE.Vector3());
+    const maxReach = wp('RightArm').distanceTo(wp('RightForeArm')) + wp('RightForeArm').distanceTo(wp('RightHand')) + 0.07;
+    const fin = (side) => { const f = []; for (const x of ['Index', 'Middle', 'Ring', 'Pinky']) for (let i = 1; i <= 3; i++) if (hb[`${side}Hand${x}${i}`]) f.push(hb[`${side}Hand${x}${i}`]); return f; };
+    J.heroRig = { root, model, bones: hb, pivot, sword, scarf: [], mixer, actions, maxReach, fingers: fin('Right'), fingersL: fin('Left'), afterMixer: (dt) => applyKitPose(J, dt, e.body) };
+    J.sword = sword;
+  }
   mixer.update(0); // 부품은 '대기 동작' 자세에서 재고 붙인다 (원본의 기본 자세는 많이 다르다)
   if (o.kit) applyKit(J, e, kind, KITS[o.kit] || {}, { shell, dark, glow, accent: e.rim(o.accent ?? o.rim ?? 0xff2bd6), metal: e.std(o.metal ?? 0x8a8f9c) });
   return J;
@@ -243,62 +257,90 @@ export function holdInHand(J, e, obj, axis, side = 'R') {
   J.weapons.push({ obj, axis: axis.clone().normalize(), side });
 }
 
-// GuardAnimator와 같은 입력(armRx, state)으로 스키닝 모델을 움직인다
+// GuardAnimator와 같은 입력(armRx, state, alert)으로 스키닝 모델을 움직인다
+//  안드로이드: 주인공과 같은 칼 휘두르기 (감기 → 임팩트 → 마무리 곡선, 허리 비틀기, 디딤발, 손목)
+//  중장 로봇: 모델에 들어 있는 펀치 동작을 예고 때 당겨 두었다가 내지른다
+const REST = POSES.REST_POSE, AIM = [-1.57, 0, 0, 1.0, -1.57, 0];
+const easeOut = (u) => 1 - Math.pow(1 - u, 3);
 export class ModelAnimator {
-  constructor(J, e) { this.J = J; this.e = e; this.w = { idle: 1, walk: 0, run: 0 }; this.atk = 0; this.k = 0; this.arm = 0.25; }
-  update(dt, speed, armRx, state, broken, ov = {}) {
-    const J = this.J, R = J.R, W = this.w;
+  constructor(J, e) {
+    this.J = J; this.e = e; this.w = { idle: 1, walk: 0, run: 0, punch: 0 }; this.n = 0; this.prev = 'chase';
+    this.P = [...(J.heroRig?.gunMode ? AIM : REST)]; this.keys = null; this.t = 0;
+    if (J.heroRig) this.ha = new HeroAnimator(J.heroRig);
+    else {
+      const clip = models.heavy.animations.find((a) => a.name === 'Punch');
+      if (clip) { this.punch = J.mixer.clipAction(clip); this.punch.play(); this.punch.setEffectiveWeight(0); this.punch.timeScale = 0; this.pdur = clip.duration; }
+    }
+  }
+    _pick() { return POSES.COMBO[this.n++ % 3].keys; } // 가로베기 → 올려베기 → 내려찍기를 차례로 (연격이 자연스럽게 이어진다)
+
+  update(dt, speed, armRx, state, broken) {
+    if (this.ha) return this._android(dt, speed, armRx, state, broken);
+    return this._heavy(dt, speed, armRx, state, broken);
+  }
+
+  _android(dt, speed, armRx, state, broken) {
+    const J = this.J, R = J.heroRig, P = this.P, alert = this.e.alert || 0;
+    if (state !== this.prev) {
+      if (state === 'windup') { this.keys = this._pick(armRx); this.s0 = [...P]; this.t = 0; }
+      if (state === 'strike') { if (!this.keys) this.keys = this._pick(armRx); this.t = 0; }
+      if (state !== 'windup' && state !== 'strike') { this.keys = null; if (state !== 'recover') this.n = 0; }
+      this.prev = state;
+    }
+    this.t += dt;
+    if (R.gunMode) { const k = 1 - Math.exp(-12 * dt); for (let i = 0; i < 6; i++) P[i] += (AIM[i] - P[i]) * k; }
+    else if (state === 'windup' && this.keys) { // 예고가 진행되는 만큼 칼을 감아 둔다
+      const u = easeOut(Math.min(1, Math.max(alert, this.t / 0.9)));
+      for (let i = 0; i < 6; i++) P[i] = this.s0[i] + (this.keys[0][i] - this.s0[i]) * u;
+    } else if (state === 'strike' && this.keys) { // 짧고 빠르게 곡선을 따라 휘두른다
+      spline(this.keys, easeInOut(Math.min(1, this.t / 0.16)), P);
+    } else { const k = 1 - Math.exp(-7 * dt); for (let i = 0; i < 6; i++) P[i] += (REST[i] - P[i]) * k; }
+    R.pivot.rotation.set(P[0], P[1], P[2]);
+    R.sword.position.y = P[3] * R.maxReach;
+    R.sword.rotation.set(P[4], 0, P[5]);
+    this.ha.update(dt, { speed: broken ? 0 : speed, dashing: false, attacking: state === 'windup' || state === 'strike' || !!R.gunMode, charging: false, stagger: broken, swordYaw: P[1] });
+    this._weapons();
+  }
+
+  _heavy(dt, speed, armRx, state, broken) {
+    const J = this.J, R = J.R, W = this.w, alert = this.e.alert || 0;
+    if (state !== this.prev) { this.t = 0; this.prev = state; }
+    this.t += dt;
+    const attacking = state === 'windup' || state === 'strike';
+    W.punch += ((attacking && this.punch ? 1 : 0) - W.punch) * (1 - Math.exp(-(attacking ? 18 : 6) * dt));
     const k = 1 - Math.exp(-8 * dt);
     const t = speed < 0.4 ? [1, 0, 0] : speed < 4 ? [0, 1, 0] : [0, 0, 1];
     W.idle += (t[0] - W.idle) * k; W.walk += (t[1] - W.walk) * k; W.run += (t[2] - W.run) * k;
-    for (const n of ['idle', 'walk', 'run']) J.actions[n]?.setEffectiveWeight(W[n]);
+    for (const n of ['idle', 'walk', 'run']) J.actions[n]?.setEffectiveWeight(W[n] * (1 - W.punch));
     if (J.actions.walk) J.actions.walk.timeScale = THREE.MathUtils.clamp(speed / R.walkRef, 0.6, 1.8);
     if (J.actions.run) J.actions.run.timeScale = THREE.MathUtils.clamp(speed / R.runRef, 0.8, 1.6);
+    if (this.punch) {
+      this.punch.setEffectiveWeight(W.punch);
+      // 펀치 동작: 앞 35%는 당기기(예고), 그 뒤 35%는 내지르기
+      const f = state === 'windup' ? 0.35 * easeOut(Math.min(1, Math.max(alert, this.t / 0.9)))
+        : state === 'strike' ? 0.35 + 0.35 * Math.min(1, this.t / 0.18) : this.punch.time / this.pdur;
+      this.punch.time = f * this.pdur;
+    }
     J.mixer.update(dt);
     applyKitPose(J, dt, this.e.body);
-    this.e.body.updateMatrixWorld(true);
+    // 무너지면 상체를 숙인다
+    if (broken && J.spine) { this.e.body.updateMatrixWorld(true); rotateWorld(J.spine, _a.set(1, 0, 0).applyQuaternion(this.e.body.getWorldQuaternion(_q)), -0.5); }
+    this._weapons();
+  }
 
-    const body = this.e.body;
-    const bq = body.getWorldQuaternion(_q);
-    const right = _a.set(1, 0, 0).applyQuaternion(bq);
-    // 상체 기울이기: 예고 때 뒤로 젖히고, 휘두를 때 앞으로 숙인다. 무너지면 웅크린다
-    const wantLean = broken ? 0.7 : state === 'strike' ? 0.35 : state === 'windup' ? -0.12 : 0;
-    this.k += (wantLean - this.k) * (1 - Math.exp(-(state === 'strike' ? 30 : 10) * dt));
-    if (J.spine) rotateWorld(J.spine, right, -this.k * 0.6);
-    if (J.chest) rotateWorld(J.chest, right, -this.k * 0.4);
-
-    // 오른팔: armRx(어깨 앞뒤 각도)를 손 목표 지점으로 바꿔 IK. 쉬는 자세(0.25)에서 멀수록 강하게
-    const aim = J.weapons.some((w) => w.rifle) ? 1.45 : armRx;
-    this.arm += (aim - this.arm) * (1 - Math.exp(-(state === 'strike' ? 40 : 14) * dt));
-    const wR = Math.min(1, Math.abs(this.arm - 0.25) * 1.6 + (J.weapons.some((w) => w.rifle) ? 1 : 0));
-    const [up, lo, hand] = J.armR;
-    if (up && lo && hand && wR > 0.02) {
-      const S = up.getWorldPosition(new THREE.Vector3());
-      const len = S.distanceTo(lo.getWorldPosition(_b)) + _b.distanceTo(hand.getWorldPosition(_c));
-      const th = this.arm;
-      const dir = new THREE.Vector3(0.12, -Math.cos(th), -Math.sin(th)).normalize().applyQuaternion(bq);
-      const goal = S.clone().addScaledVector(dir, len * 0.92).lerp(hand.getWorldPosition(new THREE.Vector3()), 1 - wR);
-      const pole = new THREE.Vector3(0.6, -0.4, 0.5).applyQuaternion(bq);
-      twoBone(up, lo, hand, goal, pole);
-    }
-    // 왼팔: 방패를 들거나 총을 받친다
-    const [ul, ll, hl] = J.armL;
-    const shield = J.shieldRef, rifle = J.weapons.find((w) => w.rifle);
-    if (ul && ll && hl && (shield || rifle)) {
-      const goal = shield ? shield.getWorldPosition(new THREE.Vector3()).addScaledVector(_c.set(0, 0, 1).applyQuaternion(bq), 0.15)
-        : rifle.obj.localToWorld(new THREE.Vector3(0, 0, -0.45));
-      twoBone(ul, ll, hl, goal, new THREE.Vector3(-0.6, -0.5, 0.4).applyQuaternion(bq));
-    }
-    // 무기: 손에 붙이고 팔뚝 방향으로
+  // 손에 붙인 무기(망치 등): 손 위치에, 팔뚝 방향으로
+  _weapons() {
+    const J = this.J, body = this.e.body;
+    if (!J.weapons.length) return;
+    body.updateMatrixWorld(true);
+    const bq = body.getWorldQuaternion(_q).clone().invert();
     for (const wp of J.weapons) {
       const arm = wp.side === 'L' ? J.armL : J.armR;
       if (!arm[1] || !arm[2]) continue;
       const hp = arm[2].getWorldPosition(new THREE.Vector3()), ep = arm[1].getWorldPosition(new THREE.Vector3());
-      const fdir = hp.clone().sub(ep).normalize();
-      body.worldToLocal(hp);
-      const local = fdir.applyQuaternion(_q.copy(bq).invert());
-      wp.obj.position.copy(hp);
-      wp.obj.quaternion.setFromUnitVectors(wp.axis, local);
+      const fdir = hp.clone().sub(ep).normalize().applyQuaternion(bq);
+      wp.obj.position.copy(body.worldToLocal(hp));
+      wp.obj.quaternion.setFromUnitVectors(wp.axis, fdir);
     }
   }
 }

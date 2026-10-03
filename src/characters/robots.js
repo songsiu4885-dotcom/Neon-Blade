@@ -129,27 +129,29 @@ function buildModelVersion(e, o) {
   const shell = e.std(o.shell ?? 0x3a4058), dark = e.std(0x14161f), eye = e.rim(o.rim ?? 0xff2bd6);
   shell.roughness = 0.32; shell.metalness = 0.85;
   const weapon = o.weapon ?? 'baton';
-  if (weapon === 'baton' || weapon === 'maul') {
+  if (J.sword) { // 안드로이드: 주인공처럼 손잡이 기준(+y가 날 쪽) 칼 묶음에 쥔다
+    const g = J.sword;
+    if (weapon === 'baton') {
+      g.add(mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.85, 8), dark, 0, 0.3, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.4, 8), eye, 0, 0.62, 0));
+    } else if (weapon === 'sword') {
+      g.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.26, 8), dark, 0, -0.02, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.22, 0.03, 0.06), shell, 0, 0.12, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.06, 1.25, 0.012), eye, 0, 0.76, 0));
+    } else if (weapon === 'rifle') { // 조준 자세에서 +z가 총구, +y가 손잡이 아래
+      g.add(mesh(new THREE.BoxGeometry(0.06, 0.16, 0.08), dark, 0, 0.05, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.08, 0.11, 0.75), dark, 0, -0.08, 0.15));
+      g.add(mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.6, 8).rotateX(Math.PI / 2), shell, 0, -0.06, 0.8));
+      g.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 8).rotateX(Math.PI / 2), dark, 0, -0.17, 0.2));
+      g.add(mesh(new THREE.SphereGeometry(0.025, 8, 6), eye, 0, -0.17, 0.33));
+      J.heroRig.gunMode = true; J.rifle = g;
+    }
+  } else if (weapon === 'baton' || weapon === 'maul') {
     const g = group(); const big = weapon === 'maul';
     g.add(mesh(new THREE.CylinderGeometry(0.035, 0.04, big ? 1.6 : 1.0, 8), dark, 0, big ? -0.7 : -0.45, 0));
     if (big) { g.add(mesh(new THREE.BoxGeometry(0.5, 0.55, 0.5), shell, 0, -1.5, 0)); g.add(mesh(new THREE.BoxGeometry(0.52, 0.06, 0.52), eye, 0, -1.5, 0)); }
     else g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.42, 8), eye, 0, -0.78, 0));
     holdInHand(J, e, g, new THREE.Vector3(0, -1, 0));
-  } else if (weapon === 'sword') {
-    const g = group();
-    g.add(mesh(new THREE.BoxGeometry(0.08, 0.22, 0.08), dark, 0, -0.02, 0));
-    g.add(mesh(new THREE.BoxGeometry(0.3, 0.04, 0.08), shell, 0, -0.14, 0));
-    g.add(mesh(new THREE.BoxGeometry(0.07, 1.4, 0.025), eye, 0, -0.86, 0));
-    holdInHand(J, e, g, new THREE.Vector3(0, -1, 0));
-  } else if (weapon === 'rifle') {
-    const g = group();
-    g.add(mesh(new THREE.BoxGeometry(0.09, 0.13, 0.8), dark, 0, 0.02, -0.15));
-    g.add(mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.9, 8).rotateX(Math.PI / 2), shell, 0, 0.04, -0.95));
-    g.add(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.28, 8).rotateX(Math.PI / 2), dark, 0, 0.13, -0.25));
-    g.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), eye, 0, 0.13, -0.4));
-    holdInHand(J, e, g, new THREE.Vector3(0, 0, -1));
-    J.weapons[J.weapons.length - 1].rifle = true;
-    J.rifle = g;
   }
   if (o.shield) {
     const sh = group(-0.25, 1.05, -0.6);
