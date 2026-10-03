@@ -10,7 +10,7 @@ let cache = null, loaded = null;
 const srcMaps = new Map(); // 재질 이름 → 원래 텍스처 (복제 모델을 다른 색으로 칠할 때 쓴다)
 export const heroGltf = () => loaded;
 // fetch가 막힌 곳(아티팩트 뷰어)에서도 읽히도록 data: 주소는 직접 풀어서 쓴다
-async function loadBuffer(url) {
+export async function loadBuffer(url) {
   if (url.startsWith('data:')) {
     const bin = atob(url.slice(url.indexOf(',') + 1));
     const out = new Uint8Array(bin.length);
@@ -39,7 +39,7 @@ const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3
 const UP = new THREE.Vector3(0, 1, 0);
 
 // 뼈의 월드 방향(자식 쪽)을 target 쪽으로 돌린다
-function aimBone(bone, child, target) {
+export function aimBone(bone, child, target) {
   const from = bone.getWorldPosition(_a);
   const cur = child.getWorldPosition(_b).sub(from).normalize();
   const want = _c.copy(target).sub(from).normalize();
@@ -49,7 +49,7 @@ function aimBone(bone, child, target) {
 }
 
 // 뼈를 월드 축 기준으로 돌린다 (뼈마다 다른 로컬 축 방향을 신경 쓰지 않아도 된다)
-function rotateWorld(bone, axis, angle) {
+export function rotateWorld(bone, axis, angle) {
   if (Math.abs(angle) < 1e-4) return;
   _q.setFromAxisAngle(axis, angle).multiply(bone.getWorldQuaternion(_q2));
   bone.quaternion.copy(bone.parent.getWorldQuaternion(_q3).invert().multiply(_q));
@@ -57,7 +57,7 @@ function rotateWorld(bone, axis, angle) {
 }
 
 // 2관절 IK: b1(어깨/고관절) → b2(팔꿈치/무릎) → b3(손목/발목)을 target에 닿게, 굽는 쪽은 pole 방향
-function twoBone(b1, b2, b3, target, pole) {
+export function twoBone(b1, b2, b3, target, pole) {
   const S = b1.getWorldPosition(new THREE.Vector3());
   const L1 = S.distanceTo(b2.getWorldPosition(_a));
   const L2 = _a.distanceTo(b3.getWorldPosition(_b));

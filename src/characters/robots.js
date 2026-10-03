@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { robotsReady, buildModelRobot, holdInHand, ModelAnimator } from './robotModels.js';
 
 // 적 로봇들. 재질은 Enemy.std()/rim()으로 만들어 피격 번쩍임·예고 색이 그대로 적용된다.
 // rim()으로 만든 부분(눈, 발광선)은 공격 예고 때 붉게, 자세가 무너지면 노랗게 바뀐다.
@@ -9,6 +10,7 @@ const group = (x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position
 // ---- 경비 로봇 (근접): 육중한 2족 보행, 외눈, 전기 진압봉 ----
 // o: { shell, rim, vent, weapon: 'baton'|'sword'|'maul'|'rifle'|'none', shield }
 export function buildGuardRobot(e, o = {}) {
+  if (o.body !== 'proc' && robotsReady()) return buildModelVersion(e, o);
   const shell = e.std(o.shell ?? 0x3a4058), dark = e.std(0x14161f), joint = e.std(0x60677e), eye = e.rim(o.rim ?? 0xff2bd6), vent = e.rim(o.vent ?? 0xff5ad8);
   shell.roughness = 0.32; shell.metalness = 0.85;
   joint.roughness = 0.4; joint.metalness = 0.9;
@@ -120,11 +122,52 @@ export function buildGuardRobot(e, o = {}) {
   return J;
 }
 
+// 실제 3D 모델 버전: 같은 옵션(색, 무기, 방패)을 모델 위에 입힌다. o.body: 'android'(기본) | 'heavy'
+function buildModelVersion(e, o) {
+  const J = buildModelRobot(e, o, o.body === 'heavy' ? 'heavy' : 'android');
+  J.e = e;
+  const shell = e.std(o.shell ?? 0x3a4058), dark = e.std(0x14161f), eye = e.rim(o.rim ?? 0xff2bd6);
+  shell.roughness = 0.32; shell.metalness = 0.85;
+  const weapon = o.weapon ?? 'baton';
+  if (weapon === 'baton' || weapon === 'maul') {
+    const g = group(); const big = weapon === 'maul';
+    g.add(mesh(new THREE.CylinderGeometry(0.035, 0.04, big ? 1.6 : 1.0, 8), dark, 0, big ? -0.7 : -0.45, 0));
+    if (big) { g.add(mesh(new THREE.BoxGeometry(0.5, 0.55, 0.5), shell, 0, -1.5, 0)); g.add(mesh(new THREE.BoxGeometry(0.52, 0.06, 0.52), eye, 0, -1.5, 0)); }
+    else g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.42, 8), eye, 0, -0.78, 0));
+    holdInHand(J, e, g, new THREE.Vector3(0, -1, 0));
+  } else if (weapon === 'sword') {
+    const g = group();
+    g.add(mesh(new THREE.BoxGeometry(0.08, 0.22, 0.08), dark, 0, -0.02, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.3, 0.04, 0.08), shell, 0, -0.14, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.07, 1.4, 0.025), eye, 0, -0.86, 0));
+    holdInHand(J, e, g, new THREE.Vector3(0, -1, 0));
+  } else if (weapon === 'rifle') {
+    const g = group();
+    g.add(mesh(new THREE.BoxGeometry(0.09, 0.13, 0.8), dark, 0, 0.02, -0.15));
+    g.add(mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.9, 8).rotateX(Math.PI / 2), shell, 0, 0.04, -0.95));
+    g.add(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.28, 8).rotateX(Math.PI / 2), dark, 0, 0.13, -0.25));
+    g.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), eye, 0, 0.13, -0.4));
+    holdInHand(J, e, g, new THREE.Vector3(0, 0, -1));
+    J.weapons[J.weapons.length - 1].rifle = true;
+    J.rifle = g;
+  }
+  if (o.shield) {
+    const sh = group(-0.25, 1.05, -0.6);
+    sh.add(mesh(new THREE.BoxGeometry(0.95, 1.3, 0.1), shell));
+    for (const y of [0.5, -0.5]) sh.add(mesh(new THREE.BoxGeometry(0.85, 0.04, 0.12), eye, 0, y, 0));
+    for (const x of [-0.4, 0.4]) sh.add(mesh(new THREE.BoxGeometry(0.04, 1.15, 0.12), eye, x, 0, 0));
+    e.body.add(sh);
+    J.shield = sh; J.shieldRef = sh;
+  }
+  return J;
+}
+
 // 보행 애니메이션: 무거운 발걸음, 몸통 흔들림, 왼팔 흔들기. armRx는 오른팔(공격 팔)의 어깨 각도.
 export class GuardAnimator {
-  constructor(J) { this.J = J; this.phase = Math.random() * 6; this.cur = {}; }
+  constructor(J) { this.J = J; this.phase = Math.random() * 6; this.cur = {}; if (J.isModel) this.model = new ModelAnimator(J, J.e); }
   _go(key, v, k, dt) { const c = this.cur[key] ?? v; return (this.cur[key] = c + (v - c) * (1 - Math.exp(-k * dt))); }
   update(dt, speed, armRx, state, broken, ov = {}) {
+    if (this.model) return this.model.update(dt, speed, armRx, state, broken, ov);
     const J = this.J;
     const moving = Math.min(1, speed / 1.2);
     this.phase += (speed * dt / 1.7) * Math.PI * 2;

@@ -30,5 +30,7 @@ npm run build    # dist/ 로 빌드
 
 ## 출처
 - 캐릭터 모델 **Vanguard** (`public/models/Soldier.glb`): [Mixamo](https://www.mixamo.com/) (Adobe). three.js 예제에 포함된 파일을 색과 장식만 바꿔 사용했습니다 (주인공은 흰색, 아담은 검은색). 이 모델의 권리는 Adobe에 있으며, 이 저장소는 비영리 학교 전시용입니다.
+- 적 안드로이드 모델 **X Bot** (`public/models/Android.glb`): [Mixamo](https://www.mixamo.com/) (Adobe). three.js 예제에 포함된 파일을 색과 무기만 바꿔 사용했습니다. 권리는 Adobe에 있습니다.
+- 중장·소형 로봇 모델 **Robot Expressive** (`public/models/Heavy.glb`): Tomás Laulhé ([Quaternius](https://quaternius.com/)), 수정 Don McCurdy. CC0 1.0 (자유 이용). three.js 예제에 포함된 파일을 색만 바꿔 사용했습니다.
 - 3D 엔진: [three.js](https://threejs.org/) (MIT License)
-- 효과음과 배경음은 코드로 합성했고, 도시와 나머지 캐릭터는 직접 만들었습니다.
+- 효과음과 배경음은 코드로 합성했고, 도시와 드론·헬릭스 같은 나머지 기계는 직접 만들었습니다.

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Input } from './input.js';
 import { Player } from './player.js';
 import { loadHero, buildHero, HeroAnimator } from './characters/hero.js';
+import { loadRobots } from './characters/robotModels.js';
 import { CameraRig } from './camera.js';
 import { FX } from './fx.js';
 import { buildStreet, GATE_Z } from './levels/street.js';
@@ -109,6 +110,7 @@ function applySkin(i = 0) {
 }
 applySkin(0);
 loadHero().then((g) => { player.useHero(buildHero(g), HeroAnimator); }).catch((e) => console.warn('hero model', e));
+loadRobots().catch((e) => console.warn('robot models', e)); // 적 로봇 모델 (못 읽으면 절차적 로봇)
 
 // ---- 구역 정의: 거리 13구역 + 타워 5개 층 ----
 const STREET_TRIG = [-20, -72, -132, -196, -266, -346, -412, -480, -576, -676, -766, -822, -886];

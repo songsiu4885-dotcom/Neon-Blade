@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Enemy, warnMaterial } from './enemy.js';
 import { buildGuardRobot, GuardAnimator } from '../characters/robots.js';
+import { robotsReady } from '../characters/robotModels.js';
 import { audio } from '../audio.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -113,17 +114,23 @@ export class Bomber extends Enemy {
     super({ maxHp: 30, radius: 0.55, maxPosture: 12, hitY: 0.6 });
     this.pos.set(x, 0, z);
     this.state = 'chase'; this.t = 0; this.speed = 7.2;
-    const shell = this.std(0x4a3420), dark = this.std(0x15120e), eye = this.rim(0xff4020);
-    shell.roughness = 0.4; shell.metalness = 0.7;
-    this.ball = new THREE.Group(); this.ball.position.y = 0.55; this.body.add(this.ball);
-    this.ball.add(mesh(new THREE.SphereGeometry(0.5, 18, 12), shell));
-    this.ball.add(mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 24), dark));
-    for (let i = 0; i < 8; i++) { // 표면의 경고등
-      const a = (i / 8) * Math.PI * 2;
-      this.ball.add(mesh(new THREE.SphereGeometry(0.06, 8, 6), eye, Math.cos(a) * 0.48, Math.sin(a) * 0.48 * 0.3, Math.sin(a) * 0.48));
+    if (robotsReady()) { // 작은 로봇이 달려와 붙는다
+      this.J = buildGuardRobot(this, { body: 'heavy', size: 0.55, shell: 0x6a4420, dark: 0x1a1410, rim: 0xff4020, weapon: 'none' });
+      this.anim = new GuardAnimator(this.J);
+      this.ball = new THREE.Group(); this._last = V3(x, 0, z);
+    } else {
+      const shell = this.std(0x4a3420), dark = this.std(0x15120e), eye = this.rim(0xff4020);
+      shell.roughness = 0.4; shell.metalness = 0.7;
+      this.ball = new THREE.Group(); this.ball.position.y = 0.55; this.body.add(this.ball);
+      this.ball.add(mesh(new THREE.SphereGeometry(0.5, 18, 12), shell));
+      this.ball.add(mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 24), dark));
+      for (let i = 0; i < 8; i++) { // 표면의 경고등
+        const a = (i / 8) * Math.PI * 2;
+        this.ball.add(mesh(new THREE.SphereGeometry(0.06, 8, 6), eye, Math.cos(a) * 0.48, Math.sin(a) * 0.48 * 0.3, Math.sin(a) * 0.48));
+      }
+      this.body.add(mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.25, 10), dark, 0, 1.1, 0));
+      this.body.add(mesh(new THREE.SphereGeometry(0.09, 8, 6), eye, 0, 1.25, 0)); // 머리 위 점멸등
     }
-    this.body.add(mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.25, 10), dark, 0, 1.1, 0));
-    this.body.add(mesh(new THREE.SphereGeometry(0.09, 8, 6), eye, 0, 1.25, 0)); // 머리 위 점멸등
     this.ring = mesh(new THREE.CircleGeometry(1, 36).rotateX(-Math.PI / 2), warnMaterial(), 0, 0.06, 0); this.ring.visible = false; this.group.add(this.ring);
     this.R = 3.2;
     this.beep = 0;
@@ -160,7 +167,10 @@ export class Bomber extends Enemy {
   update(dt, ctx) {
     super.update(dt, ctx);
     if (!this.alive) return;
-    this.ball.position.y = 0.55 + (this.state === 'arm' ? Math.sin(this.t * 50) * 0.04 : 0);
+    if (this.anim) { // 점화되면 제자리에서 떨며 몸을 웅크린다
+      walkAnim(this, dt, this.state === 'arm' ? -2.4 : 0.25, this.state === 'arm' ? 'windup' : 'chase', null);
+      this.body.position.y = this.state === 'arm' ? Math.abs(Math.sin(this.t * 50)) * 0.05 : 0;
+    } else this.ball.position.y = 0.55 + (this.state === 'arm' ? Math.sin(this.t * 50) * 0.04 : 0);
   }
 }
 

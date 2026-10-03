@@ -149,7 +149,7 @@ export class Mech extends Enemy {
     super({ maxHp: 150, radius: 1.0, maxPosture: 75 });
     this.pos.set(x, 0, z);
     this.state = 'chase'; this.t = 0; this.cd = 1.5 + Math.random() * 1.5;
-    this.J = buildGuardRobot(this, { shell: 0x5a4a30, rim: 0xffb347, vent: 0xffb347, weapon: 'none' });
+    this.J = buildGuardRobot(this, { body: 'heavy', shell: 0x5a4a30, rim: 0xffb347, vent: 0xffb347, weapon: 'none' });
     this.anim = new GuardAnimator(this.J);
     this.body.scale.setScalar(1.28);
     // 머리 위 뿔 (돌진 형상)
