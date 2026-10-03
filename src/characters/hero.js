@@ -143,7 +143,7 @@ export function buildHero(gltf, o = {}) {
 
   // 목도리: 목에 두른 고리 + 등 뒤로 날리는 두 가닥
   const scarf = [];
-  {
+  if (o.scarf) { // 목도리는 빼기로 했다 (등 뒤로 날리던 두 가닥)
     const neck = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 8, 18).rotateX(Math.PI / 2), scarfMat);
     ring.scale.set(1.1, 1, 1.05);
@@ -284,20 +284,30 @@ export class HeroAnimator {
 
     const wStance = Math.max(W.atk, W.charge) * (1 - W.run) * (1 - W.dash);
     // ---- 엉덩이 낮추기 ----
-    const drop = FOOT.dash.drop * W.dash + FOOT.stance.drop * wStance;
+    // 칼의 높이(어깨 앞뒤 각도 rx): 높이 들면 0 쪽, 수평 -1.5, 아래로 내려치면 -2.3
+    const rx = s.swordPitch ?? -1.5;
+    const lean = clamp((-1.1 - rx) * 0.3, -0.22, 0.4) * W.atk;          // 내려칠 때 숙이고, 치켜들 때 젖힌다
+    const drop = FOOT.dash.drop * W.dash + FOOT.stance.drop * wStance + Math.max(0, lean) * 0.25; // 내려칠수록 무릎을 더 굽힌다
     if (drop > 0.001) {
       const hp = B.Hips.getWorldPosition(this._g).addScaledVector(UP, -drop);
       B.Hips.position.copy(B.Hips.parent.worldToLocal(hp));
       B.Hips.updateWorldMatrix(false, true);
     }
 
-    // ---- 상체: 숙이기와 허리 비틀기 (칼 방향을 따라 감았다 푼다) ----
-    const yaw = clamp(s.swordYaw * 0.5, -0.8, 0.8) * W.atk - 0.45 * W.charge;
-    const pitch = 0.6 * W.dash + 0.18 * W.atk + 0.12 * W.charge - 0.35 * W.hurt;
-    const sp = [B.Spine, B.Spine1, B.Spine2], share = [0.38, 0.34, 0.28];
+    // ---- 몸통 전체로 휘두르기: 골반이 먼저 돌고 어깨가 따라온다 (칼이 가는 쪽으로 감았다 푼다) ----
+    // 발은 다리 IK가 땅에 붙여 두므로 골반을 돌리면 무릎·허리가 비틀린다
+    const twist = clamp(s.swordYaw * 0.75, -1.15, 1.15) * W.atk - 0.5 * W.charge;
+    const hipYaw = twist * 0.4;
+    W.hipYaw = (W.hipYaw ?? 0) + (hipYaw - (W.hipYaw ?? 0)) * (1 - Math.exp(-30 * dt)); // 골반은 아주 조금 늦게 (채찍처럼)
+    rotateWorld(B.Hips, ay, W.hipYaw);
+    const yaw = twist - W.hipYaw;
+    const pitch = 0.6 * W.dash + 0.08 * W.atk + lean + 0.12 * W.charge - 0.35 * W.hurt;
+    const sp = [B.Spine, B.Spine1, B.Spine2], share = [0.34, 0.34, 0.32];
     sp.forEach((b, i) => { rotateWorld(b, ay, yaw * share[i]); rotateWorld(b, ax, -pitch * share[i]); });
-    rotateWorld(B.Neck, ay, -yaw * 0.55);
-    rotateWorld(B.Neck, ax, pitch * 0.65);          // 고개는 들어 앞을 본다
+    // 오른쪽 어깨(쇄골)가 휘두르는 쪽으로 따라 나온다
+    if (B.RightShoulder) rotateWorld(B.RightShoulder, ay, clamp(s.swordYaw * 0.18, -0.3, 0.3) * W.atk);
+    rotateWorld(B.Neck, ay, -twist * 0.8);          // 고개는 상대를 계속 본다
+    rotateWorld(B.Neck, ax, pitch * 0.65);
 
     // ---- 다리: 돌진 런지 / 공격 디딤 ----
     const wLeg = Math.min(1, W.dash + wStance);
@@ -331,8 +341,14 @@ export class HeroAnimator {
       R.pivotL.updateMatrixWorld(true);
       this._arm('Left');
     } else {
+      W.two = (W.two ?? 0) + (((s.twoHand && !W.dash) ? 1 : 0) - (W.two ?? 0)) * (1 - Math.exp(-(s.twoHand ? 18 : 10) * dt));
       const wL = Math.min(1, W.atk + W.charge + W.dash + (R.gunMode ? 1 : 0));
-      if (wL > 0.01) {
+      if (W.two > 0.02) { // 양손 잡기: 왼손이 칼자루 아래쪽을 쥔다 (내려찍기·강공격·차징)
+        const grip = R.sword.localToWorld(this._t.set(0, -0.13, 0));
+        grip.lerp(B.LeftHand.getWorldPosition(new THREE.Vector3()), 1 - W.two);
+        const pole = this._pole.set(-0.7, -0.5, 0.3).applyQuaternion(this._yawQ);
+        twoBone(B.LeftArm, B.LeftForeArm, B.LeftHand, grip, pole);
+      } else if (wL > 0.01) {
         const g = clamp((s.swordYaw + 1.4) / 2.8, 0, 1);
         const want = this._t.copy(LHAND.guardFwd).lerp(LHAND.guardBack, g * W.atk * (R.gunMode ? 0 : 1));
         want.lerp(LHAND.charge, W.charge * (1 - W.atk));

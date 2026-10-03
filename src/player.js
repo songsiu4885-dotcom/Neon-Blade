@@ -350,6 +350,9 @@ export class Player {
       charging: this.charging,
       stagger: this.stagger > 0,
       swordYaw: this.pose[1],
+      swordPitch: this.pose[0],
+      // 양손으로 쥐는 기술: 3타 내려찍기, 강공격, 차징
+      twoHand: this.charging || (this.atk && (this.atk.kind === 'heavy' || this.atk.def === COMBO[2])),
     });
   }
 

@@ -328,7 +328,7 @@ export class ModelAnimator {
     R.pivot.rotation.set(P[0], P[1], P[2]);
     R.sword.position.y = P[3] * R.maxReach;
     R.sword.rotation.set(P[4], 0, P[5]);
-    this.ha.update(dt, { speed: broken ? 0 : speed, dashing: false, attacking: state === 'windup' || state === 'strike' || !!R.gunMode, charging: false, stagger: broken, swordYaw: P[1] });
+    this.ha.update(dt, { speed: broken ? 0 : speed, dashing: false, attacking: state === 'windup' || state === 'strike' || !!R.gunMode, charging: false, stagger: broken, swordYaw: P[1], swordPitch: P[0], twoHand: this.keys === POSES.COMBO[2].keys });
     this._weapons();
   }
 
