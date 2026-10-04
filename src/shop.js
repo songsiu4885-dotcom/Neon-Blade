@@ -203,7 +203,7 @@ export class Backpack {
       `<label class="row">빗소리<input type="checkbox" data-k="rainSound" ${s.rainSound ? 'checked' : ''}></label>` +
       `<label class="row">조작 안내 표시<input type="checkbox" data-k="help" ${s.help ? 'checked' : ''}></label>` +
       `<label class="row">그래픽 품질<select data-k="quality"><option value="auto"${s.quality === 'auto' ? ' selected' : ''}>자동 (권장)</option><option value="high"${s.quality === 'high' ? ' selected' : ''}>높음</option><option value="mid"${s.quality === 'mid' ? ' selected' : ''}>중간</option><option value="low"${s.quality === 'low' ? ' selected' : ''}>낮음 (빠름)</option></select></label>` +
-      `<div class="set-btns"><button class="btn alt" id="setRestart">처음부터</button></div>`;
+      `<div class="set-btns"><button class="btn" id="setSave">저장하기</button><button class="btn alt" id="setLobby">로비로 나가기</button><button class="btn alt" id="setRestart">처음부터</button></div>`;
     this.setEl.querySelectorAll('[data-k]').forEach((el) => {
       const ev = el.type === 'range' ? 'input' : 'change';
       el.addEventListener(ev, () => {
@@ -215,5 +215,12 @@ export class Backpack {
       el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     });
     this.setEl.querySelector('#setRestart').addEventListener('click', (e) => { e.stopPropagation(); this.close(); this.ctx.restart(); });
+    this.setEl.querySelector('#setSave').addEventListener('click', (e) => { e.stopPropagation(); this.ctx.save(); });
+    const lobby = this.setEl.querySelector('#setLobby');
+    lobby.addEventListener('click', (e) => { // 실수로 누르지 않게 두 번 눌러야 나간다
+      e.stopPropagation();
+      if (!lobby.dataset.armed) { lobby.dataset.armed = '1'; lobby.textContent = '한 번 더 누르면 나가요 (저장 안 한 진행은 사라져요)'; this.ctx.audio.bump?.(); return; }
+      this.ctx.lobby();
+    });
   }
 }

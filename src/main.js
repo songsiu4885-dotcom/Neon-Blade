@@ -8,6 +8,7 @@ import { FX } from './fx.js';
 import { buildStreet, GATE_Z } from './levels/street.js';
 import { Combat } from './combat.js';
 import { Zones, REG } from './waves.js';
+import { SlotUI, readSlot, writeSlot, SLOT_COUNT } from './save.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
 import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
@@ -461,6 +462,8 @@ const pack = new Backpack({
   inv, audio, settings, blocked: () => !started || story.blocking || shop.open || zones.cleared, pause: pauseUI,
   onChange: applyEquip, useKit, stats, applySettings,
   restart: () => newGame(false),
+  save: () => slotUI.show('save', saveGame),
+  lobby: toLobby,
 });
 applySettings(settings);
 
@@ -503,14 +506,91 @@ const backToFull = async (e) => {
 fsGate.addEventListener('click', backToFull);
 fsGate.addEventListener('touchend', backToFull, { passive: false });
 
-$('goBtn').addEventListener('click', async () => {
+// 타이틀에서 게임으로 들어갈 때 공통 (전체화면, 마우스 잠금)
+async function beginPlay() {
   audio.unlock(); audio.select();
   titleEl.style.display = 'none';
   await enterFullscreen();
   fsWanted = isFull();
   if (!input.isTouch) canvas.requestPointerLock?.();
-  newGame(true);
+}
+$('goBtn').addEventListener('click', async () => { await beginPlay(); newGame(true); });
+
+// ---- 저장 / 불러오기 / 로비 ----
+const slotUI = new SlotUI($('slots'), audio);
+const hasSave = () => Array.from({ length: SLOT_COUNT }, (_, i) => readSlot(i)).some(Boolean);
+const refreshTitle = () => { $('loadBtn').disabled = !hasSave(); };
+refreshTitle();
+$('loadBtn').addEventListener('click', () => {
+  audio.unlock(); audio.select();
+  slotUI.show('load', (i) => {
+    const sv = readSlot(i);
+    if (!sv) return '빈 칸이에요';
+    (async () => { await beginPlay(); loadGame(sv); })();
+    return true;
+  });
 });
+function saveGame(i) {
+  if (!started || zones.cleared) return '지금은 저장할 수 없어요';
+  const fighting = zones.state !== 'travel';
+  const z = zoneDefs[zones.i];
+  const ok = writeSlot(i, {
+    zone: zones.i, zoneLabel: `ZONE ${zones.i + 1} · ${z.name}`,
+    // 전투 중이면 구역을 시작할 때의 부품·처치 수로 (불러오면 그 구역을 처음부터 다시 한다)
+    inv: { ...inv, owned: [...inv.owned], equipped: [...inv.equipped], credits: fighting ? zoneCredits : inv.credits, kills: fighting ? zoneKills : inv.kills },
+    stats: { stageTime, maxCombo, perfects, execs, deaths },
+    entered: zoneDefs.map((d) => !!d.entered), shopCalls: shop.calls,
+  });
+  if (!ok) return '저장하지 못했어요 (브라우저 저장 공간이 막혀 있어요)';
+  toast(`${i + 1}번 칸에 저장했어요<small>${z.name}</small>`, 2200);
+  return true;
+}
+function loadGame(sv) {
+  resetCombatState();
+  clearField();
+  inv = { ...sv.inv, owned: [...sv.inv.owned], equipped: [...sv.inv.equipped] };
+  zoneCredits = inv.credits; zoneKills = inv.kills;
+  shop.ctx.inv = pack.ctx.inv = inv;
+  shop.reset(); shop.calls = sv.shopCalls || 0; pack.close();
+  ({ stageTime, maxCombo, perfects, execs, deaths } = { stageTime: 0, maxCombo: 0, perfects: 0, execs: 0, deaths: 0, ...sv.stats });
+  combat.hits = 0;
+  player.mods = defaultMods(); player.maxHp = 100; player.maxStamina = 3;
+  zones.reset();
+  zoneDefs.forEach((d, k) => { d.entered = !!sv.entered?.[k]; if (d.entry) env.showPad(d.entry.padIndex, false); });
+  zones.i = Math.min(sv.zone, zones.total - 1);
+  env.setGates(zones.i);
+  const z = zones.zone;
+  // 타워 층인데 아직 발판을 밟지 않았다면: 앞 구역에서 시작해 발판을 밟고 올라간다
+  let spawn = z.respawn;
+  if (z.entry && !z.entered) { env.showPad(z.entry.padIndex, true); spawn = zoneDefs[zones.i - 1].respawn; }
+  player.reset(spawn);
+  applyEquip();
+  player.hp = player.maxHp;
+  rig.target.set(player.pos.x, 1.4, player.pos.z);
+  buildPips();
+  started = true;
+  document.body.classList.remove('title');
+  zones.enabled = true;
+  if (zones.i > 0) shop.setAvailable(true);
+  banner(`ZONE ${zones.i + 1} · ${z.name}`, 2400);
+}
+// 필드의 적·탄·바닥 경고를 모두 치운다
+function clearField() {
+  for (const e of [...combat.enemies]) { scene.remove(e.group); if (e.aim) scene.remove(e.aim); e.cleanup?.(); e.dead = true; }
+  combat.enemies.length = 0;
+  combat.projectiles.clear(); combat.hazards.clear();
+}
+function toLobby() {
+  pack.close(); shop.hide?.();
+  resetCombatState();
+  zones.reset(); clearField();
+  zones.enabled = false; started = false;
+  player.reset(env.start); rig.target.set(player.pos.x, 1.4, player.pos.z);
+  document.exitPointerLock?.();
+  document.body.classList.add('title');
+  titleEl.style.display = '';
+  refreshTitle();
+}
 
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -527,7 +607,7 @@ const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
   // 타이틀/막(cinematic) 중에는 시뮬레이션을 멈추고 풍경만 살아 움직인다
-  const paused = transit || story.blocking || shop.open || pack.isOpen || fsGate.classList.contains('on');
+  const paused = transit || story.blocking || shop.open || pack.isOpen || slotUI.open || fsGate.classList.contains('on');
   document.body.classList.toggle('paused', paused);
   if (!started || paused) {
     input.poll();
