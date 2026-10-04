@@ -1024,6 +1024,8 @@ export function buildStreet(scene) {
       p.x = bx; p.z = bz;
     },
     blocked(p) { return p.y < 70 && !inside(p.x, p.z, 0); },
+    // 카메라용: 이 지점이 길 위(벽에서 m만큼 떨어진 곳)인가
+    open(x, z, m = 0) { return inside(x, z, m); },
     // z 구간 [zMin, zMax] 안에서 걸을 수 있는 무작위 지점. avoid에서 minD~maxD 떨어진 곳
     spawnInZone(zMin, zMax, avoid, minD = 12, maxD = 38, xr = [-34, 34]) {
       for (let i = 0; i < 80; i++) {

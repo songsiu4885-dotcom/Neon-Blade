@@ -57,10 +57,23 @@ export class CameraRig {
     this.target.lerp(this._tmp.set(player.pos.x, player.pos.y + 1.4, player.pos.z).add(this.pull), k);
 
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const dist = this.distance;
+    // 벽 충돌: 플레이어에서 카메라 쪽으로 조금씩 나가 보며 벽에 닿기 직전까지만 물러난다.
+    // (예전처럼 벽 밖의 카메라를 옆으로 밀어 넣으면 화면이 튀고 방향이 바뀐다)
+    const dx = Math.sin(this.yaw) * cp, dz = Math.cos(this.yaw) * cp;
+    let free = this.distance;
+    if (this.world?.open) {
+      for (let d = 0.4; d <= this.distance; d += 0.2) {
+        if (!this.world.open(this.target.x + dx * d, this.target.z + dz * d, 0.35)) { free = Math.max(0.2, d - 0.3); break; }
+      }
+    }
+    // 벽 쪽으로는 빨리 당기고, 벽에서 멀어질 때는 천천히 원래 거리로
+    this.curDist = this.curDist ?? this.distance;
+    this.curDist += (free - this.curDist) * (1 - Math.exp(-(free < this.curDist ? 30 : 4) * dt));
+    const dist = Math.min(this.curDist, this.distance);
+    const lift = (1 - dist / this.distance) * 1.7; // 가까워지면 살짝 위에서 내려다본다 (주인공 등에 가리지 않게)
     const pos = this._tmp.set(
       this.target.x + Math.sin(this.yaw) * cp * dist,
-      this.target.y + sp * dist,
+      this.target.y + sp * dist + lift,
       this.target.z + Math.cos(this.yaw) * cp * dist
     );
 
@@ -73,7 +86,6 @@ export class CameraRig {
       this.shakeAmp *= Math.exp(-12 * dt);
     }
 
-    this.world?.resolve(pos, 0.8, false);
     this.camera.position.copy(pos);
     this.camera.lookAt(this.target);
   }

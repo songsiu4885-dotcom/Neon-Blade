@@ -610,6 +610,7 @@ function frame() {
   } else objEl.style.opacity = 0;
 
   const boss = combat.enemies.find((e) => e.boss && e.alive);
+  document.body.classList.toggle('bossOn', !!boss);
   if (boss) {
     bossEl.style.opacity = 1;
     bossName.textContent = boss.name;

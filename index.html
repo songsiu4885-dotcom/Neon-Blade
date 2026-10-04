@@ -67,7 +67,7 @@
   #rotate{inset:0;z-index:99;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#050818f2;color:#7ff6ff;font-size:18px;text-align:center}
   @media (pointer:coarse) and (orientation:portrait){#rotate{display:flex}}
   /* ---- 보스 체력바 ---- */
-  #boss{position:fixed;left:50%;top:14px;transform:translateX(-50%);width:min(70vw,640px);opacity:0;transition:opacity .4s;pointer-events:none;text-align:center}
+  #boss{position:fixed;left:50%;top:14px;transform:translateX(-50%);width:min(48vw,560px);opacity:0;transition:opacity .4s;pointer-events:none;text-align:center}
   #boss .nm{color:#ffd2f7;font-weight:800;letter-spacing:6px;font-size:14px;text-shadow:0 0 10px #ff2bd6;margin-bottom:6px}
   #boss .bar{position:relative;height:12px;background:#1b0a1f;border:1px solid #ff2bd699;transform:skewX(-25deg);overflow:hidden}
   #boss .bar i{position:absolute;left:0;top:0;bottom:0}
@@ -125,7 +125,7 @@
   body.cine #hud,body.cine #hp,body.cine #rg,body.cine #stage,body.cine #obj,body.cine #boss,body.cine #combo,body.cine #bars,body.cine #dashBtn,body.cine #atkBtn,body.cine #help,body.cine #lzone,body.cine #rzone,body.cine #stick,body.cine #packBtn,body.cine #credits,body.cine #callBtn{opacity:0 !important;pointer-events:none}
   #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:14}
   #fade.on{opacity:1}
-  #toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);padding:10px 22px;background:#0b0f2ae6;border:1px solid #ffd54a;color:#ffe9a8;font-weight:700;letter-spacing:2px;opacity:0;pointer-events:none;text-align:center;z-index:6}
+  #toast{position:fixed;left:50%;top:27%;transform:translateX(-50%);padding:10px 22px;background:#0b0f2ae6;border:1px solid #ffd54a;color:#ffe9a8;font-weight:700;letter-spacing:2px;opacity:0;pointer-events:none;text-align:center;z-index:6}
   /* ---- 배낭 / 상점 / 설정 ---- */
   #packBtn{position:fixed;right:14px;top:12px;width:44px;height:44px;border-radius:10px;border:1px solid #c8b89a88;background:#0d0c10cc;z-index:12;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   #packBtn svg{width:26px;height:26px;fill:none;stroke:#e8d8b8;stroke-width:1.6;stroke-linejoin:round}
@@ -198,6 +198,12 @@
   .sh-it button:disabled{background:#3a352e;color:#7a7468;cursor:default}
   .sh-it.own{opacity:.55}
   body.title #help,body.title #hud,body.title #hp,body.title #rg,body.title #stage,body.title #packBtn,body.title #credits,body.title #obj,body.title #combo,body.title #bars{opacity:0 !important;pointer-events:none}
+  /* 보스 체력바가 다른 표시와 겹치지 않게: 좁은 화면은 구역 표시 아래로, 터치 화면은 대시칸·체력바 아래로 */
+  @media (max-width:1240px){ #boss{top:62px} body.bossOn #comm{top:122px} }
+  .touch #boss{top:96px;width:min(50vw,440px)}
+  .touch #boss .nm{font-size:12px;margin-bottom:3px}
+  body.touch.bossOn #comm{top:150px}
+  .touch #toast{top:42%}
   body.paused #lzone,body.paused #rzone,body.paused #dashBtn,body.paused #atkBtn{pointer-events:none;opacity:.25}
   #toast small{display:block;margin-top:3px;font-size:11px;letter-spacing:1px;color:#cfe0ea;font-weight:400}
 </style>
