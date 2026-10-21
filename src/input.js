@@ -17,7 +17,7 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === 'Space') { this.dashPressed = true; e.preventDefault(); }
-      if (e.code === 'KeyJ') this.attackPressed = true;
+      if ((e.code === 'KeyJ' || e.code === 'KeyK') && !e.repeat) this.attackPressed = true;
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -123,7 +123,7 @@ export class Input {
     this.move.x = x; this.move.y = y;
 
     const out = { move: this.move, lookDX: this.lookDX, lookDY: this.lookDY, dash: this.dashPressed,
-      attack: this.attackPressed, attackHeld: this.mouseHeld || this.touchAttackHeld || this.keys.has('KeyJ') };
+      attack: this.attackPressed, attackHeld: this.mouseHeld || this.touchAttackHeld || this.keys.has('KeyJ') || this.keys.has('KeyK') };
     this.lookDX = this.lookDY = 0;
     this.dashPressed = false;
     this.attackPressed = false;
