@@ -11,7 +11,9 @@ import { Zones, REG } from './waves.js';
 import { SlotUI, readSlot, writeSlot, SLOT_COUNT } from './save.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
-import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
+import { SKINS, computeMods, defaultMods } from './chips.js';
+import { Endless, ARENA } from './endless.js';
+import { loadRank, addRank, previewPlace, rankTable } from './ranking.js';
 import { STORY, ZONE_NAMES, ZONE_BONUS, ZONE_BOSS, BOSS_NAMES, StoryUI } from './story.js';
 import { DoctorShop, Backpack, SETTINGS_DEFAULT } from './shop.js';
 
@@ -65,6 +67,7 @@ const hpf = $('hpf'), vig = $('vig'), rageFx = $('rageFx'), rgEl = $('rg'), rgf 
 const slowEl = $('slow'), popEl = $('pop'), toastEl = $('toast'), creditsEl = $('credits');
 const comboEl = $('combo'), comboN = $('comboN');
 const hud = $('hud');
+const resultEl = $('result'), rankEl = $('rank');
 const vib = (ms) => { try { navigator.vibrate?.(ms); } catch {} };
 const story = new StoryUI($('comm'), $('cine'));
 
@@ -74,8 +77,9 @@ let titleT = 0;
 let stageTime = 0, maxCombo = 0, perfects = 0, execs = 0, deaths = 0;
 let slowT = 0;          // 완벽 회피 슬로모션 (실시간 초)
 let gateHintCd = 0;
-// 배낭: 기계 부품(credits), 산 칩, 장착 칩, 수리 키트
-const newInv = () => ({ credits: 0, owned: [], equipped: [], kits: 1, kills: 0 });
+// 배낭: 기계 부품(credits), 올린 스탯 단계 { 스탯 id: 단계 }
+const newInv = () => ({ credits: 0, stats: {}, kills: 0 });
+let mode = 'story'; // 'story' 스토리 모드 | 'endless' 무한 모드
 let inv = newInv();
 let zoneCredits = 0, zoneKills = 0; // 구역 시작 시점 (재도전하면 되돌린다)
 
@@ -201,7 +205,7 @@ const zones = new Zones(combat, env, zoneDefs, {
       inv.credits += ZONE_BONUS;
       toast(`구역 정리 · 기계 부품 +${ZONE_BONUS}<small>방벽 해제 · 박사 호출 가능</small>`, 2600);
     }
-    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * (zoneDefs[i].bossKey ? 0.3 : 0.1)); // 구역 클리어 회복은 조금만 (보스를 잡으면 조금 더)
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * (zoneDefs[i].bossKey ? 0.4 : 0.2)); // 구역 클리어 회복 (보스를 잡으면 조금 더)
     const next = zoneDefs[i + 1];
     if (next?.entry) env.showPad(next.entry.padIndex, true); // 다음 층으로 가는 발판을 켠다
     const c = STORY.zoneClear[i];
@@ -265,6 +269,7 @@ combat.onKill = (e) => {
     if (now - (creditsEl._t || 0) > 250) { creditsEl._t = now; creditsEl.animate([{ transform: 'scale(1.25)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 300 }); }
   }
   inv.kills++;
+  if (mode === 'endless' && endless.enabled && e?.score) { endless.score += e.score; endless.kills++; if (e.boss) pop(`+${e.score}점`, '#ffe0a0'); }
   const M = player.mods;
   if (player.hp < player.maxHp && M.killHeal) player.hp = Math.min(player.maxHp, player.hp + M.killHeal);
   if (!M.killGauge || player.stamina >= player.maxStamina) return; // 기본은 처치해도 대시 게이지가 차지 않는다 (특수 칩 〈처치 환급 장치〉로만)
@@ -306,6 +311,7 @@ player.onHurt = (dmg, dir) => {
 player.onDeath = () => {
   audio.death();
   deaths++;
+  if (mode === 'endless') { setTimeout(showResult, 900); return; }
   $('overInfo').textContent = `ZONE ${zones.i + 1} · ${zoneDefs[zones.i].name}`;
   setTimeout(() => { over.style.display = 'flex'; }, 700);
 };
@@ -355,6 +361,7 @@ function retryZone() { // 사망 후: 이번 구역을 처음부터, 산 칩은 
   pop('CHECKPOINT', '#7ff6ff');
 }
 async function newGame(withIntro = true) {
+  stopEndless(); mode = 'story';
   resetCombatState();
   inv = newInv(); zoneCredits = 0; zoneKills = 0;
   shop.ctx.inv = pack.ctx.inv = inv;
@@ -376,20 +383,108 @@ async function newGame(withIntro = true) {
 const bind = (id, fn) => { const el = $(id); el.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fn(); }, { passive: false }); };
 bind('retryBtn', () => newGame(false)); bind('retryBtn2', retryZone); bind('newBtn', () => newGame(false));
 
-// ---- 장착 변경 / 수리 키트 ----
+// ---- 무한 모드: 지하철 광장에서 끝없이 버티기 (5웨이브마다 보스) ----
+const endless = new Endless(combat, env, {
+  onWave(w, bossKey) {
+    shop.setAvailable(false);
+    if (bossKey) { banner(`WAVE ${w} · BOSS · ${BOSS_NAMES[bossKey]}`, 2800); audio.warn(); }
+    else { banner(`WAVE ${w}`, 1800); if (w > 1) audio.warn(); }
+  },
+  onWaveClear(w, boss) {
+    const bonus = 20 + 4 * w + (boss ? 80 : 0);
+    inv.credits += bonus;
+    const heal = boss ? 40 : 15;
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * heal / 100);
+    toast(`WAVE ${w} 클리어 · 기계 부품 +${bonus}<small>체력 +${heal}% · 박사 호출(C)로 스탯을 올릴 수 있어요</small>`, 2800);
+    audio.gateOpen();
+    shop.setAvailable(true);
+  },
+  onBossDown() { fx.flash(0.15); rig.shake(0.08); },
+});
+function stopEndless() { if (endless.enabled) { endless.stop(); clearField(); } }
+async function startEndless() {
+  stopEndless();
+  mode = 'endless';
+  resetCombatState(); resultEl.classList.remove('on');
+  clearField();
+  inv = newInv(); inv.credits = 60; zoneCredits = 0; zoneKills = 0;
+  shop.ctx.inv = pack.ctx.inv = inv;
+  shop.reset(); pack.close();
+  stageTime = 0; maxCombo = 0; perfects = 0; execs = 0; deaths = 0; combat.hits = 0;
+  player.mods = defaultMods(); player.maxHp = 100; player.maxStamina = 3;
+  document.body.classList.remove('od');
+  zones.reset();
+  for (const z of zoneDefs) if (z.entry) { z.entered = false; env.showPad(z.entry.padIndex, false); }
+  player.reset(V(ARENA.start[0], 0, ARENA.start[1]));
+  rig.yaw = 0; rig.target.set(player.pos.x, 1.4, player.pos.z);
+  buildPips();
+  started = true;
+  document.body.classList.remove('title');
+  endless.start(player);
+  shop.setAvailable(true);
+  banner('무한 모드', 2000);
+  story.say([{ w: 'doc', t: '끝없이 몰려온다네. 5웨이브마다 큰 놈이 나오지. 웨이브 사이에 나를 부르면(C) 부품으로 몸을 강화해 주겠네.' }]);
+}
+function endlessHud() {
+  const E = endless, k = E.nextBoss - E.wave;
+  let sub;
+  if (E.state === 'fight') sub = E.bossWave ? '보스전' : `남은 적 ${E.remaining} · 보스까지 ${k}웨이브`;
+  else sub = `다음 웨이브 ${Math.ceil(Math.max(0, E.timer))}초 · ${k === 1 ? '다음은 보스!' : `보스까지 ${k}웨이브`}`;
+  return `ENDLESS · WAVE ${Math.max(1, E.wave)}<small>점수 ${E.score} · ${sub}</small>`;
+}
+
+// ---- 무한 모드 결과 · 이름 쓰고 랭킹 등록 ----
+for (const el of [resultEl, rankEl]) {
+  el.addEventListener('click', (e) => e.stopPropagation());
+  el.addEventListener('mousedown', (e) => e.stopPropagation());
+  el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+}
+const resName = $('resName');
+for (const ev of ['keydown', 'keyup']) resName.addEventListener(ev, (e) => e.stopPropagation()); // 이름을 쓰는 동안 게임 단축키가 눌리지 않게
+function showResult() {
+  if (mode !== 'endless') return;
+  document.exitPointerLock?.();
+  shop.hide(); pack.close();
+  const E = endless, t = Math.floor(stageTime);
+  $('resWave').textContent = `WAVE ${E.wave} 도달`;
+  $('resScore').textContent = E.score;
+  $('resRows').innerHTML =
+    `<span>일반 적 처치</span><b>${E.kills}</b><span>보스 처치</span><b>${E.bosses}</b>` +
+    `<span>최대 콤보</span><b>${maxCombo}</b><span>버틴 시간</span><b>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</b>`;
+  const place = previewPlace(E.score, E.wave);
+  $('resPlace').textContent = place ? `지금 기록이면 ${place}위! 이름을 남겨 주세요` : '20위 안에는 못 들었어요 · 다시 도전해 봐요!';
+  $('resForm').classList.toggle('done', !place);
+  $('resSave').disabled = false;
+  try { resName.value = localStorage.getItem('nb_lastName') || ''; } catch {}
+  const top = loadRank();
+  $('resRank').innerHTML = top.length ? `<h4 class="rs-h">현재 랭킹</h4>${rankTable(top.slice(0, 5))}` : '';
+  resultEl.classList.add('on');
+  if (!input.isTouch) setTimeout(() => resName.focus(), 50);
+}
+$('resForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if ($('resSave').disabled) return;
+  const name = resName.value.trim().slice(0, 10) || '이름 없음';
+  const place = addRank({ name, score: endless.score, wave: endless.wave, kills: endless.kills });
+  try { localStorage.setItem('nb_lastName', name); } catch {}
+  $('resSave').disabled = true;
+  $('resForm').classList.add('done');
+  resName.blur();
+  audio.chip();
+  $('resRank').innerHTML = `<h4 class="rs-h">${place > 0 ? `${place}위로 등록했어요!` : place < 0 ? '저장하지 못했어요 (브라우저 저장 공간이 막혀 있어요)' : '등록했어요'}</h4>${rankTable(loadRank().slice(0, 10), place - 1)}`;
+});
+bind('resRetry', () => { resultEl.classList.remove('on'); if (!input.isTouch) canvas.requestPointerLock?.(); startEndless(); });
+bind('resHome', () => toLobby());
+bind('homeBtn1', () => toLobby());
+bind('homeBtn2', () => toLobby());
+
+// ---- 스탯 강화 반영 ----
 function applyEquip() {
-  const m = computeMods(inv.equipped);
+  const m = computeMods(inv.stats);
   player.upgrade(m);
   if (!m.overdrive && (player.rampage || player.rage)) { player.rampage = false; player.rage = 0; rageFx.classList.remove('on'); }
   document.body.classList.toggle('od', m.overdrive);
   buildPips();
-}
-function useKit() {
-  if (!inv.kits || player.dead || player.hp >= player.maxHp) { audio.bump(); return; }
-  inv.kits--;
-  player.hp = Math.min(player.maxHp, player.hp + player.maxHp * KIT.heal);
-  audio.chip();
-  pop('수리', '#9fd8c8');
 }
 const fmt = (v) => (v >= 1 ? '+' : '') + Math.round((v - 1) * 100) + '%';
 function stats() {
@@ -405,7 +500,7 @@ function stats() {
     ['공격 속도', fmt(M.atkSpeed)],
     ['자세 피해', fmt(M.postureMul)],
     ['처치 수', inv.kills],
-    ['진행', `ZONE ${Math.min(zones.i + 1, zones.total)} / ${zones.total}`],
+    mode === 'endless' ? ['진행', `WAVE ${endless.wave} · 점수 ${endless.score}`] : ['진행', `ZONE ${Math.min(zones.i + 1, zones.total)} / ${zones.total}`],
   ];
 }
 
@@ -455,13 +550,13 @@ function applySettings(s) {
   try { localStorage.setItem('nb_settings', JSON.stringify(s)); } catch {}
 }
 
-const blocked = () => !started || story.blocking || shop.open || pack.isOpen || player.dead || zones.cleared;
+const blocked = () => !started || story.blocking || shop.open || pack.isOpen || player.dead || zones.cleared || resultEl.classList.contains('on');
 const pauseUI = (on) => { if (on) document.exitPointerLock?.(); };
 const shop = new DoctorShop({ inv, audio, blocked, pause: pauseUI, onChange: applyEquip });
 const pack = new Backpack({
-  inv, audio, settings, blocked: () => !started || story.blocking || shop.open || zones.cleared, pause: pauseUI,
-  onChange: applyEquip, useKit, stats, applySettings,
-  restart: () => newGame(false),
+  inv, audio, settings, blocked: () => !started || story.blocking || shop.open || zones.cleared || resultEl.classList.contains('on'), pause: pauseUI,
+  stats, applySettings,
+  restart: () => (mode === 'endless' ? startEndless() : newGame(false)),
   save: () => slotUI.show('save', saveGame),
   lobby: toLobby,
 });
@@ -469,8 +564,7 @@ applySettings(settings);
 
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') audio.toggleMute();
-  if (!started) return;
-  if (e.code === 'KeyQ' && !blocked()) useKit();
+  if (!started || mode !== 'story') return;
   if (e.code === 'KeyR' && player.dead) retryZone();
   else if (e.code === 'KeyR' && zones.cleared) newGame(false);
   if (e.code === 'KeyN' && player.dead) newGame(false);
@@ -515,6 +609,13 @@ async function beginPlay() {
   if (!input.isTouch) canvas.requestPointerLock?.();
 }
 $('goBtn').addEventListener('click', async () => { await beginPlay(); newGame(true); });
+$('endlessBtn').addEventListener('click', async () => { await beginPlay(); startEndless(); });
+$('rankBtn').addEventListener('click', () => {
+  audio.unlock(); audio.select();
+  $('rankList').innerHTML = rankTable(loadRank());
+  rankEl.classList.add('on');
+});
+$('rankClose').addEventListener('click', () => { audio.select(); rankEl.classList.remove('on'); });
 
 // ---- 저장 / 불러오기 / 로비 ----
 const slotUI = new SlotUI($('slots'), audio);
@@ -531,13 +632,14 @@ $('loadBtn').addEventListener('click', () => {
   });
 });
 function saveGame(i) {
+  if (mode === 'endless') return '무한 모드는 저장할 수 없어요 (스토리 모드에서만 저장돼요)';
   if (!started || zones.cleared) return '지금은 저장할 수 없어요';
   const fighting = zones.state !== 'travel';
   const z = zoneDefs[zones.i];
   const ok = writeSlot(i, {
     zone: zones.i, zoneLabel: `ZONE ${zones.i + 1} · ${z.name}`,
     // 전투 중이면 구역을 시작할 때의 부품·처치 수로 (불러오면 그 구역을 처음부터 다시 한다)
-    inv: { ...inv, owned: [...inv.owned], equipped: [...inv.equipped], credits: fighting ? zoneCredits : inv.credits, kills: fighting ? zoneKills : inv.kills },
+    inv: { ...inv, stats: { ...inv.stats }, credits: fighting ? zoneCredits : inv.credits, kills: fighting ? zoneKills : inv.kills },
     stats: { stageTime, maxCombo, perfects, execs, deaths },
     entered: zoneDefs.map((d) => !!d.entered), shopCalls: shop.calls,
   });
@@ -546,9 +648,12 @@ function saveGame(i) {
   return true;
 }
 function loadGame(sv) {
+  stopEndless(); mode = 'story';
   resetCombatState();
   clearField();
-  inv = { ...sv.inv, owned: [...sv.inv.owned], equipped: [...sv.inv.equipped] };
+  // 예전 저장(칩 방식)은 산 칩 하나당 부품 150개로 돌려준다
+  const old = sv.inv.stats ? 0 : (sv.inv.owned?.length || 0) * 150;
+  inv = { credits: (sv.inv.credits || 0) + old, kills: sv.inv.kills || 0, stats: { ...(sv.inv.stats || {}) } };
   zoneCredits = inv.credits; zoneKills = inv.kills;
   shop.ctx.inv = pack.ctx.inv = inv;
   shop.reset(); shop.calls = sv.shopCalls || 0; pack.close();
@@ -582,6 +687,7 @@ function clearField() {
 }
 function toLobby() {
   pack.close(); shop.hide?.();
+  stopEndless(); resultEl.classList.remove('on');
   resetCombatState();
   zones.reset(); clearField();
   zones.enabled = false; started = false;
@@ -637,6 +743,7 @@ function frame() {
   player.update(simDt, inp, rig, combat);
   combat.update(eDt, player);
   zones.update(simDt, player);
+  endless.update(simDt, player);
   const zc = zones.zone;
   if (zones.enabled && zones.state === 'travel' && zc?.entry && !zc.entered && !player.dead) {
     const pd = zc.entry.pad;
@@ -645,7 +752,7 @@ function frame() {
   story.update(dt);
   creditsEl.textContent = `⚙ ${inv.credits}`;
   // 박사 호출은 전투가 없을 때만 (구역 정리 후 다음 전투 전까지)
-  if (shop.available && (zones.state === 'fight' || player.dead)) shop.setAvailable(false);
+  if (shop.available && ((mode === 'story' && zones.state === 'fight') || (mode === 'endless' && endless.state === 'fight') || player.dead)) shop.setAvailable(false);
   if (!player.dead && !zones.cleared) stageTime += dt;
   perfTick(dt);
   setLodCenter(camera.position);
@@ -660,7 +767,7 @@ function frame() {
   }
 
   const pr = zones.progress;
-  const wl = `STAGE 1 · ZONE ${Math.min(zones.i + 1, zones.total)}/${zones.total}<small>${zoneDefs[Math.min(zones.i, zones.total - 1)].name}${zones.state === 'fight' ? ` · 웨이브 ${pr.wave}/${pr.waves} · 남은 적 ${zones.remaining}` : ''}</small>`;
+  const wl = mode === 'endless' ? endlessHud() : `STAGE 1 · ZONE ${Math.min(zones.i + 1, zones.total)}/${zones.total}<small>${zoneDefs[Math.min(zones.i, zones.total - 1)].name}${zones.state === 'fight' ? ` · 웨이브 ${pr.wave}/${pr.waves} · 남은 적 ${zones.remaining}` : ''}</small>`;
   if (stageEl.dataset.v !== wl) { stageEl.dataset.v = wl; stageEl.innerHTML = wl; }
   bars.update(combat.enemies, camera, player);
   hpf.style.width = (player.hp / player.maxHp) * 100 + '%';
@@ -670,7 +777,7 @@ function frame() {
   rgf.style.width = player.rage + '%';
   rgEl.classList.toggle('on', player.rampage);
   const bossAlive = combat.enemies.some((e) => e.boss && e.alive);
-  audio.setMode(player.dead || zones.cleared ? 'quiet' : bossAlive ? 'boss' : zones.state === 'fight' ? 'combat' : 'explore');
+  audio.setMode(player.dead || zones.cleared ? 'quiet' : bossAlive ? 'boss' : zones.state === 'fight' || endless.state === 'fight' ? 'combat' : 'explore');
   rig.update(dt, player);
   fx.update(eDt, player);
   env.update(dt, player.pos, camera, innerHeight);
@@ -703,7 +810,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 frame();
-window.__game = { renderer, player, rig, combat, fx, waves: zones, zones, audio, story, env, newGame, retryZone, start: () => $('goBtn').click() };
+window.__game = { renderer, player, rig, combat, fx, waves: zones, zones, endless, audio, story, env, newGame, retryZone, startEndless, toLobby, get inv() { return inv; }, start: () => $('goBtn').click() };
 
 // 필름 그레인 (사진 같은 질감)
 {

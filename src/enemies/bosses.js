@@ -118,7 +118,7 @@ class ScriptBoss extends Enemy {
         this.onPhase?.(ctx);
       }
     }
-    this.sp = (this.o.speeds ?? [1, 1.15, 1.3])[this.phase - 1] * this.rage;
+    this.sp = (this.o.speeds ?? [1, 1.15, 1.3])[this.phase - 1] * this.rage * (this.spMul ?? 1); // spMul: 무한 모드에서 보스가 나올수록 빨라진다
     if (this.state === 'intro') {
       this.t += dt; this.face(4); this.pose = 'chase';
       if (this.t > (this.o.introT ?? 1.3)) { this.state = 'idle'; this.cd = 0.6; this.summon(ctx, this.o.summons?.[1]); }

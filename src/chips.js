@@ -1,8 +1,4 @@
-// 칩: 전투 후 박사를 호출해 기계 부품으로 사서 배낭에 넣고, 정해진 슬롯 수만큼만 장착한다.
-// basic: 기본 개조(능력치) / special: 특수 개조(싸우는 방식을 바꾸는 능력)
-
-export const SLOTS = { basic: 3, special: 2 };
-export const KIT = { name: '수리 키트', desc: '체력 45% 회복 (Q 또는 배낭에서 사용)', price: 70, heal: 0.45, max: 5 };
+// 스탯 강화: 박사에게 기계 부품을 내고 능력치를 한 단계씩 올린다. 같은 스탯을 여러 번 올릴 수 있고, 올릴수록 값이 오른다.
 
 export const defaultMods = () => ({
   extraDash: 0, rechargeMul: 1, killGauge: 0, dodgeSlow: 0.5, counterTime: 0, counterMul: 2, dodgeRage: 0,
@@ -10,37 +6,31 @@ export const defaultMods = () => ({
   hitGauge: 0, speedMul: 1, overdrive: false, hitHeal: 0, rangeMul: 1, atkSpeed: 1,
 });
 
-export const CHIPS = [
-  // ---- 기본 개조 ----
-  { id: 'hp+', kind: 'basic', price: 120, name: '강철 심장', desc: '최대 체력 +30', apply: (m) => { m.hpBonus += 30; } },
-  { id: 'hp2', kind: 'basic', price: 420, name: '이중 펌프 심장', desc: '최대 체력 +55', apply: (m) => { m.hpBonus += 55; } },
-  { id: 'dmg+', kind: 'basic', price: 220, name: '예리한 날', desc: '주는 피해 +15%', apply: (m) => { m.dmgMul *= 1.15; } },
-  { id: 'dmg2', kind: 'basic', price: 480, name: '고주파 날', desc: '주는 피해 +28%', apply: (m) => { m.dmgMul *= 1.28; } },
-  { id: 'armor', kind: 'basic', price: 280, name: '장갑 코팅', desc: '받는 피해 -20%', apply: (m) => { m.dmgTaken *= 0.8; } },
-  { id: 'dash+', kind: 'basic', price: 240, name: '보조 대시 코어', desc: '대시 게이지 +1칸', apply: (m) => { m.extraDash += 1; } },
-  { id: 'recharge', kind: 'basic', price: 140, name: '쾌속 충전기', desc: '대시 충전 40% 빨라짐', apply: (m) => { m.rechargeMul *= 0.6; } },
-  { id: 'posture+', kind: 'basic', price: 220, name: '자세 파쇄기', desc: '자세 게이지 피해 +40%', apply: (m) => { m.postureMul *= 1.4; } },
-  { id: 'legs', kind: 'basic', price: 110, name: '강화 다리', desc: '이동 속도 +12%', apply: (m) => { m.speedMul *= 1.12; } },
-  { id: 'reach', kind: 'basic', price: 200, name: '연장 칼날', desc: '공격 범위 +20% (닿는 거리)', apply: (m) => { m.rangeMul *= 1.2; } },
-  { id: 'reach2', kind: 'basic', price: 450, name: '플라즈마 칼날', desc: '공격 범위 +35%, 휘두르는 폭도 넓어짐', apply: (m) => { m.rangeMul *= 1.35; m.arcAdd = (m.arcAdd || 0) + 25; } },
-  { id: 'speed', kind: 'basic', price: 230, name: '가속 서보 모터', desc: '공격 속도 +15%', apply: (m) => { m.atkSpeed *= 1.15; } },
-  { id: 'speed2', kind: 'basic', price: 470, name: '초전도 근섬유', desc: '공격 속도 +28%', apply: (m) => { m.atkSpeed *= 1.28; } },
-  { id: 'repair', kind: 'basic', price: 300, name: '자가 수리 회로', desc: '적 처치 시 체력 +5', apply: (m) => { m.killHeal += 5; } },
-  // ---- 특수 개조 ----
-  { id: 'overdrive', kind: 'special', price: 520, name: '오버드라이브', desc: '공격하면 폭주 게이지가 찬다. 가득 차면 10초간 피해 +50%, 공격·이동 가속', apply: (m) => { m.overdrive = true; } },
-  { id: 'dodge+', kind: 'special', price: 420, name: '시간 왜곡 칩', desc: '완벽 회피 슬로모션 0.9초, 반격 2.6배', apply: (m) => { m.dodgeSlow = 0.9; m.counterTime += 0.6; m.counterMul = 2.6; } },
-  { id: 'vamp', kind: 'special', price: 480, name: '흡혈 칼날', desc: '적중할 때마다 체력 +1.2', apply: (m) => { m.hitHeal += 1.2; } },
-  { id: 'killcharge', kind: 'special', price: 150, name: '처치 충전기', desc: '적 처치 시 대시 게이지 +1칸', apply: (m) => { m.killGauge = 1; } },
-  { id: 'hitcharge', kind: 'special', price: 340, name: '전하 흡수기', desc: '적중할 때마다 대시 게이지 조금 충전', apply: (m) => { m.hitGauge += 0.12; } },
-  { id: 'dashcut', kind: 'special', price: 360, name: '관통 대시', desc: '대시 베기 피해 +70%', apply: (m) => { m.dashCutMul = 1.7; } },
-  { id: 'rampamp', kind: 'special', price: 300, name: '폭주 증폭기', desc: '폭주 게이지 +60%, 지속 +5초, 완벽 회피 시 +25 (오버드라이브 필요)', apply: (m) => { m.rampGain = 1.6; m.rampBonus += 5; m.dodgeRage += 25; } },
+// price: 첫 단계 값, grow: 단계마다 곱해지는 값, max: 최대 단계 (없으면 무제한)
+export const STATS = [
+  { id: 'hp', name: '체력', unit: '최대 체력 +20', price: 50, grow: 1.16, apply: (m, n) => { m.hpBonus += 20 * n; } },
+  { id: 'atk', name: '공격력', unit: '주는 피해 +10%', price: 70, grow: 1.18, apply: (m, n) => { m.dmgMul *= 1 + 0.1 * n; } },
+  { id: 'def', name: '방어력', unit: '받는 피해 -6%', price: 70, grow: 1.2, max: 10, apply: (m, n) => { m.dmgTaken *= Math.pow(0.94, n); } },
+  { id: 'aspd', name: '공격 속도', unit: '공격 속도 +7%', price: 80, grow: 1.22, max: 10, apply: (m, n) => { m.atkSpeed *= 1 + 0.07 * n; } },
+  { id: 'range', name: '공격 범위', unit: '닿는 거리 +8%, 휘두르는 폭 +4°', price: 70, grow: 1.22, max: 10, apply: (m, n) => { m.rangeMul *= 1 + 0.08 * n; m.arcAdd = (m.arcAdd || 0) + 4 * n; } },
+  { id: 'move', name: '이동 속도', unit: '이동 속도 +5%', price: 50, grow: 1.22, max: 8, apply: (m, n) => { m.speedMul *= 1 + 0.05 * n; } },
+  { id: 'dash', name: '대시 칸', unit: '대시 게이지 +1칸', price: 220, grow: 1.9, max: 3, apply: (m, n) => { m.extraDash += n; } },
+  { id: 'recharge', name: '대시 충전', unit: '대시 충전 +12% 빠르게', price: 60, grow: 1.22, max: 8, apply: (m, n) => { m.rechargeMul *= Math.pow(0.89, n); } },
+  { id: 'posture', name: '자세 파괴', unit: '자세 게이지 피해 +15%', price: 60, grow: 1.2, max: 10, apply: (m, n) => { m.postureMul *= 1 + 0.15 * n; } },
+  { id: 'vamp', name: '흡혈', unit: '적중할 때마다 체력 +0.4', price: 110, grow: 1.25, max: 8, apply: (m, n) => { m.hitHeal += 0.4 * n; } },
+  { id: 'repair', name: '처치 회복', unit: '적 처치 시 체력 +3', price: 80, grow: 1.22, max: 8, apply: (m, n) => { m.killHeal += 3 * n; } },
+  { id: 'dodge', name: '완벽 회피', unit: '슬로모션 +0.1초, 반격 피해 +20%', price: 90, grow: 1.3, max: 5, apply: (m, n) => { m.dodgeSlow += 0.1 * n; m.counterTime += 0.15 * n; m.counterMul += 0.2 * n; } },
+  { id: 'overdrive', name: '오버드라이브', unit: '공격하면 폭주 게이지가 찬다. 가득 차면 10초간 피해 +50%, 공격·이동 가속 (단계마다 지속 +2초)', price: 300, grow: 1.5, max: 4, apply: (m, n) => { if (n) { m.overdrive = true; m.rampBonus += 2 * (n - 1); m.dodgeRage += 10 * n; } } },
 ];
 
-export const chipById = (id) => CHIPS.find((c) => c.id === id);
+export const statById = (id) => STATS.find((s) => s.id === id);
+export const statLevel = (stats, id) => stats?.[id] || 0;
+export const statPrice = (s, lv) => Math.round((s.price * Math.pow(s.grow, lv)) / 5) * 5;
+export const statMaxed = (s, lv) => s.max != null && lv >= s.max;
 
-export function computeMods(ids) {
+export function computeMods(stats = {}) {
   const m = defaultMods();
-  for (const id of ids) chipById(id)?.apply(m);
+  for (const s of STATS) { const n = statLevel(stats, s.id); if (n) s.apply(m, n); }
   return m;
 }
 

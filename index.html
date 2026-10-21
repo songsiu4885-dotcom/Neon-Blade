@@ -182,7 +182,7 @@
   .sh-tabs button{flex:1;padding:8px;background:#16141a;border:1px solid #2e2a26;color:#a8a090;font:700 13px system-ui;letter-spacing:2px;cursor:pointer}
   .sh-tabs button.on{color:#121014;background:#9fd8c8;border-color:#9fd8c8}
   #shop.special .sh-tabs button.on{background:#ff8ae6;border-color:#ff8ae6}
-  #shop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,94vw);max-height:86vh;overflow:auto;z-index:11;display:none;background:#0d0c11f4;border:1px solid #6a5a40;color:#d8d4cc}
+  #shop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94vw);max-height:86vh;overflow:auto;z-index:11;display:none;background:#0d0c11f4;border:1px solid #6a5a40;color:#d8d4cc}
   #shop.on{display:block}#shop.special{border-color:#6a2a60}
   .sh-box{padding:16px 18px}
   .sh-head{display:flex;justify-content:space-between;align-items:baseline}
@@ -197,6 +197,9 @@
   #shop.special .sh-it button{background:#ff8ae6}
   .sh-it button:disabled{background:#3a352e;color:#7a7468;cursor:default}
   .sh-it.own{opacity:.55}
+  .sh-it b em{font-style:normal;font-size:11px;font-weight:700;color:#9fd8c8;margin-left:6px}
+  .sh-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  @media (max-width:640px){.sh-list{grid-template-columns:1fr}}
   body.title #help,body.title #hud,body.title #hp,body.title #rg,body.title #stage,body.title #packBtn,body.title #credits,body.title #obj,body.title #combo,body.title #bars{opacity:0 !important;pointer-events:none}
   /* 보스 체력바가 다른 표시와 겹치지 않게: 좁은 화면은 구역 표시 아래로, 터치 화면은 대시칸·체력바 아래로 */
   @media (max-width:1240px){ #boss{top:62px} body.bossOn #comm{top:122px} }
@@ -208,6 +211,35 @@
   .tt-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
   .btn.go.load{background:#7ff6ff;box-shadow:0 0 18px #00e5ff88}
   .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
+  .tt-btns.sub{margin-top:10px}.tt-btns.sub .btn{padding:9px 26px;font-size:14px}
+  .btn.go.story{background:#7ff6ff;box-shadow:0 0 18px #00e5ff88}
+  #result,#rank{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:#050818dd;padding:16px}
+  #result.on,#rank.on{display:flex}
+  .rs-box,.rk-box{width:min(520px,94vw);max-height:92vh;overflow:auto;padding:18px 22px;background:#0d0c11f4;border:1px solid #ff5ad888;color:#d8d4cc;text-align:center}
+  .rs-box b.t{display:block;font-size:30px;letter-spacing:8px;color:#ff8cf0;text-shadow:0 0 14px #ff2bd6}
+  .rs-wave{margin:4px 0 6px;color:#7ff6ff;font-size:15px;letter-spacing:2px}
+  .rs-score small{display:block;font-size:11px;letter-spacing:4px;color:#b8a888}
+  .rs-score span{font-size:52px;font-weight:800;color:#ffe0a0;text-shadow:0 0 18px #ffb84a88}
+  #resRows{display:grid;grid-template-columns:auto auto;gap:4px 24px;justify-content:center;font-size:13px;margin:6px 0 10px;color:#9fe8f4}
+  #resRows b{color:#ffd2f7;text-align:right}
+  #resPlace{margin:4px 0 6px;font-size:13px;color:#ffe0a0}
+  .rs-in{display:flex;gap:8px;justify-content:center}
+  .rs-in input{flex:1;max-width:240px;padding:10px 12px;font:600 15px system-ui,sans-serif;background:#16141a;border:1px solid #7ff6ff88;color:#f0e6d0;outline:none}
+  .rs-in input:focus{border-color:#7ff6ff;box-shadow:0 0 10px #00e5ff55}
+  .rs-in .btn{padding:9px 16px;font-size:14px}
+  #resForm.done{display:none}
+  #result .btns{margin-top:14px}
+  .rk-box{border-color:#7ff6ff88}
+  .rk-box h3{margin:0 0 2px;font-size:18px;letter-spacing:6px;color:#f0e6d0}
+  .rk-note{margin:0 0 10px;font-size:11px;color:#8a8070}
+  .rk-tb{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  .rk-tb th{font-size:10px;letter-spacing:2px;color:#b8a888;font-weight:700;padding:4px;border-bottom:1px solid #3a352e}
+  .rk-tb td{padding:5px 4px;border-bottom:1px dashed #2a2620}
+  .rk-tb td:nth-child(2){text-align:left;color:#f0e6d0}
+  .rk-tb tr.top1 td:first-child{color:#ffd54a;font-weight:800}.rk-tb tr.top2 td:first-child{color:#d8e0e8;font-weight:800}.rk-tb tr.top3 td:first-child{color:#e0a070;font-weight:800}
+  .rk-tb tr.me td{background:#ff5ad822;color:#fff}
+  .rs-h{margin:12px 0 0;font-size:12px;letter-spacing:2px;color:#ffe0a0}
+  .rk-empty{color:#8a8070;font-size:13px;margin:14px 0}
   #slots{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:#05081899}
   #slots.on{display:flex}
   .sl-box{width:min(520px,92vw);padding:18px 20px;background:#0d0c11f4;border:1px solid #5a5244;color:#d8d4cc}
@@ -233,7 +265,7 @@
 <div id="vignette"></div>
 <div id="grain"></div>
 <div id="hud"></div>
-<div id="help"><b>조작</b><kbd>WASD</kbd>이동 · 마우스 시점<br><kbd>좌클릭</kbd>공격 (꾹 = 차지)<br><kbd>Space</kbd>대시 베기<br>공격 직전 대시 = 완벽 회피<br>노란 적 베기 = 처형<br><kbd>C</kbd>박사 호출 (전투 후)<br><kbd>Q</kbd>수리 키트<br><kbd>Tab</kbd>배낭 · 설정</div>
+<div id="help"><b>조작</b><kbd>WASD</kbd>이동 · 마우스 시점<br><kbd>좌클릭</kbd>공격 (꾹 = 차지)<br><kbd>Space</kbd>대시 베기<br>공격 직전 대시 = 완벽 회피<br>노란 적 베기 = 처형<br><kbd>C</kbd>박사 호출 · 스탯 강화 (전투 후)<br><kbd>Tab</kbd>배낭 · 설정</div>
 <div id="bars"></div>
 <div id="slow"></div>
 <div id="pop"></div>
@@ -242,16 +274,19 @@
 <div id="banner"></div>
 <div id="stage"></div>
 <div id="obj"><span id="objArrow">▲</span><span id="objText"></span></div>
-<div id="clear"><b class="t">STAGE CLEAR</b><div id="rankBig">S</div><div id="clearRows"></div><div class="btns"><button class="btn" id="retryBtn">처음부터 (R)</button></div></div>
-<div id="over"><b>SYSTEM DOWN</b><span id="overInfo"></span><div class="btns"><button class="btn" id="retryBtn2">구역 재도전 (R)</button><button class="btn alt" id="newBtn">처음부터 (N)</button></div></div>
+<div id="clear"><b class="t">STAGE CLEAR</b><div id="rankBig">S</div><div id="clearRows"></div><div class="btns"><button class="btn" id="retryBtn">처음부터 (R)</button><button class="btn alt" id="homeBtn1">처음 화면으로</button></div></div>
+<div id="over"><b>SYSTEM DOWN</b><span id="overInfo"></span><div class="btns"><button class="btn" id="retryBtn2">구역 재도전 (R)</button><button class="btn alt" id="newBtn">처음부터 (N)</button><button class="btn alt" id="homeBtn2">처음 화면으로</button></div></div>
+<div id="result"><div class="rs-box"><b class="t">GAME OVER</b><p class="rs-wave" id="resWave"></p><div class="rs-score"><small>점수</small><span id="resScore">0</span></div><div id="resRows"></div><form id="resForm" autocomplete="off"><p id="resPlace"></p><div class="rs-in"><input id="resName" maxlength="10" placeholder="이름 (10자까지)"><button class="btn" id="resSave" type="submit">랭킹 등록</button></div></form><div id="resRank"></div><div class="btns"><button class="btn" id="resRetry">다시 하기</button><button class="btn alt" id="resHome">처음 화면으로</button></div></div></div>
+<div id="rank"><div class="rk-box"><h3>무한 모드 랭킹</h3><p class="rk-note">이 컴퓨터(브라우저)에 저장된 기록 · 상위 20명</p><div id="rankList"></div><div class="sl-btns"><button class="btn alt" id="rankClose">닫기</button></div></div></div>
 <div id="title"><div class="tt-box">
   <p class="tt-sub">NEO SEOUL 2087</p>
   <h1>네온 블레이드</h1>
   <p class="tt-chap">제1장 · 제로 프로토콜</p>
-  <div class="tt-btns"><button id="goBtn" class="btn go">새 게임</button><button id="loadBtn" class="btn go load">불러오기</button></div>
+  <div class="tt-btns"><button id="endlessBtn" class="btn go">무한 모드</button><button id="goBtn" class="btn go story">스토리 모드</button></div>
+  <div class="tt-btns sub"><button id="loadBtn" class="btn alt">불러오기</button><button id="rankBtn" class="btn alt">랭킹</button></div>
   <p class="best" id="bestRank"></p>
   <p class="tt-credit">캐릭터 모델 Vanguard · X Bot: Mixamo (Adobe) &nbsp;|&nbsp; 로봇 모델 Robot Expressive: Tomás Laulhé (Quaternius, CC0) &nbsp;|&nbsp; 3D 엔진 three.js</p>
-  <p class="tt-keys">WASD 이동 · Space 대시 베기 · 좌클릭 공격 · 마우스 시점 · Tab 배낭 · C 박사 호출<br>모바일: 왼쪽 터치 이동 · 오른쪽 드래그 시점 · 버튼 공격/대시</p>
+  <p class="tt-keys">WASD 이동 · Space 대시 베기 · 좌클릭 공격 · 마우스 시점 · Tab 배낭 · C 박사 호출(스탯 강화)<br>모바일: 왼쪽 터치 이동 · 오른쪽 드래그 시점 · 버튼 공격/대시</p>
 </div></div>
 <div id="slots"></div>
 <div id="comm"></div>
