@@ -213,6 +213,21 @@
   .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
   .tt-btns.sub{margin-top:10px}.tt-btns.sub .btn{padding:9px 26px;font-size:14px}
   .btn.go.story{background:#7ff6ff;box-shadow:0 0 18px #00e5ff88}
+  #guide{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:#050818dd;padding:16px}
+  #guide.on{display:flex}
+  .gd-box{width:min(680px,94vw);max-height:90vh;display:flex;flex-direction:column;padding:18px 22px;background:#0d0c11f4;border:1px solid #7ff6ff88;color:#d8d4cc}
+  .gd-box h3{margin:0 0 8px;font-size:18px;letter-spacing:6px;color:#f0e6d0;text-align:center}
+  .gd-body{overflow:auto;font-size:13px;line-height:1.65;padding-right:6px}
+  .gd-body section{margin-bottom:12px}
+  .gd-body h4{margin:0 0 4px;font-size:12px;letter-spacing:3px;color:#ffe0a0}
+  .gd-body p{margin:0 0 6px}.gd-body ul{margin:0;padding-left:18px}.gd-body li{margin-bottom:3px}
+  .gd-body b{color:#f0e6d0}.gd-body .c-hp{color:#ff8cf0}.gd-body .c-dash{color:#7ff6ff}.gd-body .c-rage{color:#ffd54a}
+  .gd-hud{position:relative;height:46px;margin:4px 0 8px;padding:8px 14px;background:#0a0a14;border:1px solid #2a2a3a}
+  .g-hp{width:230px;max-width:70%;height:8px;background:#2a0f2a;border:1px solid #ff2bd655;transform:skewX(-25deg);margin-bottom:8px}
+  .g-hp i{display:block;width:70%;height:100%;background:linear-gradient(90deg,#ff2bd6,#ff7a5a);box-shadow:0 0 8px #ff2bd6}
+  .g-pips{display:flex;gap:8px}
+  .g-pips i{width:46px;height:10px;background:#7ff6ff;border:1px solid #00e5ff55;transform:skewX(-25deg);box-shadow:0 0 8px #00e5ff}
+  .g-pips i.e{background:#12304a;box-shadow:none}
   #result,#rank{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:#050818dd;padding:16px}
   #result.on,#rank.on{display:flex}
   .rs-box,.rk-box{width:min(520px,94vw);max-height:92vh;overflow:auto;padding:18px 22px;background:#0d0c11f4;border:1px solid #ff5ad888;color:#d8d4cc;text-align:center}
@@ -265,7 +280,7 @@
 <div id="vignette"></div>
 <div id="grain"></div>
 <div id="hud"></div>
-<div id="help"><b>조작</b><kbd>WASD</kbd>이동 · 마우스 시점<br><kbd>좌클릭</kbd>공격 (꾹 = 차지)<br><kbd>Space</kbd>대시 베기<br>공격 직전 대시 = 완벽 회피<br>노란 적 베기 = 처형<br><kbd>C</kbd>박사 호출 · 스탯 강화 (전투 후)<br><kbd>Tab</kbd>배낭 · 설정</div>
+<div id="help"><b>조작</b><kbd>WASD</kbd>이동 · 마우스 시점<br><kbd>좌클릭</kbd>공격 (꾹 = 차지)<br><kbd>Space</kbd>대시 베기<br>공격 직전 대시 = 완벽 회피<br>노란 적 베기 = 처형<br><kbd>C</kbd>박사 호출 · 스탯 강화 (전투 후)<br><kbd>Q</kbd>수리 키트 (체력 30%)<br><kbd>Tab</kbd>배낭 · 설정</div>
 <div id="bars"></div>
 <div id="slow"></div>
 <div id="pop"></div>
@@ -277,13 +292,48 @@
 <div id="clear"><b class="t">STAGE CLEAR</b><div id="rankBig">S</div><div id="clearRows"></div><div class="btns"><button class="btn" id="retryBtn">처음부터 (R)</button><button class="btn alt" id="homeBtn1">처음 화면으로</button></div></div>
 <div id="over"><b>SYSTEM DOWN</b><span id="overInfo"></span><div class="btns"><button class="btn" id="retryBtn2">구역 재도전 (R)</button><button class="btn alt" id="newBtn">처음부터 (N)</button><button class="btn alt" id="homeBtn2">처음 화면으로</button></div></div>
 <div id="result"><div class="rs-box"><b class="t">GAME OVER</b><p class="rs-wave" id="resWave"></p><div class="rs-score"><small>점수</small><span id="resScore">0</span></div><div id="resRows"></div><form id="resForm" autocomplete="off"><p id="resPlace"></p><div class="rs-in"><input id="resName" maxlength="10" placeholder="이름 (10자까지)"><button class="btn" id="resSave" type="submit">랭킹 등록</button></div></form><div id="resRank"></div><div class="btns"><button class="btn" id="resRetry">다시 하기</button><button class="btn alt" id="resHome">처음 화면으로</button></div></div></div>
+<div id="guide"><div class="gd-box"><h3>게임 설명</h3>
+<div class="gd-body">
+<section><h4>이 게임은?</h4><p>비 오는 네온 도시에서 검 한 자루로 로봇들과 싸우는 액션 게임이에요.</p>
+<p><b>무한 모드</b> — 광장에서 끝없이 몰려오는 웨이브를 버티는 모드예요. 5웨이브마다 보스가 나오고, 일반 적 1점 · 보스 60점이에요. 죽으면 이름을 써서 랭킹에 올릴 수 있어요.<br>
+<b>스토리 모드</b> — 거리 13구역과 타워 5개 층을 차례로 뚫고 최종 보스 아담과 싸워요. 저장 / 불러오기가 돼요.</p></section>
+<section><h4>화면 보는 법</h4>
+<div class="gd-hud"><div class="g-hp"><i></i></div><div class="g-pips"><i></i><i></i><i></i><i class="e"></i></div></div>
+<ul>
+<li><b class="c-hp">분홍색 긴 막대</b> = <b>내 체력</b>이에요. 0이 되면 쓰러져요.</li>
+<li><b class="c-dash">시안(하늘색) 칸들</b> = <b>남은 대시</b>예요. 대시를 쓰면 한 칸씩 줄고, 시간이 지나면 다시 차요. 칸이 있어야 대시할 수 있어요.</li>
+<li><b class="c-rage">노란 가는 막대</b> = 폭주 게이지예요 (스탯 〈오버드라이브〉를 올리면 나와요).</li>
+<li><b>위쪽 가운데 큰 막대</b> = 보스 체력이에요. 그 아래 가는 막대는 <b>자세 게이지</b>로, 가득 차면 보스가 휘청거려요.</li>
+<li><b>왼쪽 위</b> = 지금 웨이브(구역)와 점수, 남은 적 수예요. <b>오른쪽 위 ⚙ 숫자</b> = 가진 기계 부품이에요.</li>
+<li><b>오른쪽 위 가방 버튼</b> = 배낭이에요 (Tab 키).</li></ul></section>
+<section><h4>조작</h4>
+<ul><li><b>WASD</b> 이동 · <b>마우스</b> 시점 · <b>좌클릭</b> 공격 (꾹 누르면 차지 강공격)</li>
+<li><b>Space</b> 대시 베기 — 지나가면서 적을 벤다.</li>
+<li><b>완벽 회피</b> — 적 공격이 닿기 직전에 대시하면 슬로모션이 걸리고 반격이 강해져요.</li>
+<li><b>처형</b> — 노랗게 빛나는 적을 베면 한 방에 처치해요. 보스는 자세 게이지가 차서 휘청일 때 큰 피해를 줘요.</li>
+<li>화면에 적이 없으면 카메라가 알아서 적 쪽으로 돌아가요 (설정에서 끌 수 있어요).</li>
+<li>모바일: 왼쪽 터치 이동 · 오른쪽 드래그 시점 · 공격/대시 버튼</li></ul></section>
+<section><h4>스탯 강화 (박사 호출)</h4>
+<ul><li>적을 잡으면 <b>기계 부품(⚙)</b>이 모여요.</li>
+<li>전투가 없을 때 <b>C 키</b> (또는 오른쪽의 〈박사 호출〉 버튼)를 누르면 박사의 상점이 열려요.</li>
+<li>스탯 옆의 <b>⚙ 가격 버튼</b>을 누르면 그 스탯이 한 단계 올라가요. 같은 스탯을 <b>여러 번</b> 올릴 수 있고, 올릴수록 가격이 비싸져요. (체력, 공격력, 방어력, 공격 속도, 공격 범위, 이동 속도, 대시 칸 …)</li>
+<li>무한 모드는 웨이브 사이 쉬는 시간에, 스토리 모드는 구역을 깬 뒤에 열 수 있어요.</li>
+<li>올린 스탯은 <b>배낭(Tab)</b>에서 확인해요.</li></ul></section>
+<section><h4>수리 키트</h4>
+<ul><li>상점에서 <b>⚙ 50</b>에 살 수 있고 (최대 5개 보유), <b>Q 키</b>나 배낭의 〈사용〉 버튼으로 써요.</li>
+<li>쓰면 <b>최대 체력의 30%</b>가 바로 차요. 위급할 때 아껴 쓰세요!</li></ul></section>
+<section><h4>배낭 · 설정 · 저장</h4>
+<ul><li><b>Tab</b> 키 = 배낭. 능력치와 수리 키트를 볼 수 있고, 아래 톱니바퀴로 설정(소리·그래픽·비 효과 등)을 열어요.</li>
+<li>설정에서 <b>저장하기</b>(스토리 모드만) · <b>로비로 나가기</b> · <b>처음부터</b>를 할 수 있어요.</li></ul></section>
+</div>
+<div class="sl-btns"><button class="btn alt" id="guideClose">닫기</button></div></div></div>
 <div id="rank"><div class="rk-box"><h3>무한 모드 랭킹</h3><p class="rk-note">이 컴퓨터(브라우저)에 저장된 기록 · 상위 20명</p><div id="rankList"></div><div class="sl-btns"><button class="btn alt" id="rankClose">닫기</button></div></div></div>
 <div id="title"><div class="tt-box">
   <p class="tt-sub">NEO SEOUL 2087</p>
   <h1>네온 블레이드</h1>
   <p class="tt-chap">제1장 · 제로 프로토콜</p>
   <div class="tt-btns"><button id="endlessBtn" class="btn go">무한 모드</button><button id="goBtn" class="btn go story">스토리 모드</button></div>
-  <div class="tt-btns sub"><button id="loadBtn" class="btn alt">불러오기</button><button id="rankBtn" class="btn alt">랭킹</button></div>
+  <div class="tt-btns sub"><button id="loadBtn" class="btn alt">불러오기</button><button id="rankBtn" class="btn alt">랭킹</button><button id="guideBtn" class="btn alt">게임 설명</button></div>
   <p class="best" id="bestRank"></p>
   <p class="tt-credit">캐릭터 모델 Vanguard · X Bot: Mixamo (Adobe) &nbsp;|&nbsp; 로봇 모델 Robot Expressive: Tomás Laulhé (Quaternius, CC0) &nbsp;|&nbsp; 3D 엔진 three.js</p>
   <p class="tt-keys">WASD 이동 · Space 대시 베기 · 좌클릭 공격 · 마우스 시점 · Tab 배낭 · C 박사 호출(스탯 강화)<br>모바일: 왼쪽 터치 이동 · 오른쪽 드래그 시점 · 버튼 공격/대시</p>

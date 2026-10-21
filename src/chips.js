@@ -1,5 +1,8 @@
 // 스탯 강화: 박사에게 기계 부품을 내고 능력치를 한 단계씩 올린다. 같은 스탯을 여러 번 올릴 수 있고, 올릴수록 값이 오른다.
 
+// 수리 키트: 부품 50개, 쓰면 최대 체력의 30% 회복 (Q 또는 배낭)
+export const KIT = { name: '수리 키트', price: 50, heal: 0.3, max: 5 };
+
 export const defaultMods = () => ({
   extraDash: 0, rechargeMul: 1, killGauge: 0, dodgeSlow: 0.5, counterTime: 0, counterMul: 2, dodgeRage: 0,
   rampBonus: 0, rampGain: 1, hpBonus: 0, killHeal: 0, dmgTaken: 1, dmgMul: 1, postureMul: 1, dashCutMul: 1,

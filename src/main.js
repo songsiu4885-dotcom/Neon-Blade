@@ -11,7 +11,7 @@ import { Zones, REG } from './waves.js';
 import { SlotUI, readSlot, writeSlot, SLOT_COUNT } from './save.js';
 import { EnemyBars } from './ui/bars.js';
 import { audio } from './audio.js';
-import { SKINS, computeMods, defaultMods } from './chips.js';
+import { SKINS, KIT, computeMods, defaultMods } from './chips.js';
 import { Endless, ARENA } from './endless.js';
 import { loadRank, addRank, previewPlace, rankTable } from './ranking.js';
 import { STORY, ZONE_NAMES, ZONE_BONUS, ZONE_BOSS, BOSS_NAMES, StoryUI } from './story.js';
@@ -78,7 +78,7 @@ let stageTime = 0, maxCombo = 0, perfects = 0, execs = 0, deaths = 0;
 let slowT = 0;          // 완벽 회피 슬로모션 (실시간 초)
 let gateHintCd = 0;
 // 배낭: 기계 부품(credits), 올린 스탯 단계 { 스탯 id: 단계 }
-const newInv = () => ({ credits: 0, stats: {}, kills: 0 });
+const newInv = () => ({ credits: 0, stats: {}, kits: 1, kills: 0 });
 let mode = 'story'; // 'story' 스토리 모드 | 'endless' 무한 모드
 let inv = newInv();
 let zoneCredits = 0, zoneKills = 0; // 구역 시작 시점 (재도전하면 되돌린다)
@@ -512,6 +512,13 @@ function autoCam(dt, inp) {
 }
 
 // ---- 스탯 강화 반영 ----
+function useKit() {
+  if (!inv.kits || player.dead || player.hp >= player.maxHp) { audio.bump(); return; }
+  inv.kits--;
+  player.hp = Math.min(player.maxHp, player.hp + player.maxHp * KIT.heal);
+  audio.chip();
+  pop(`수리 +${Math.round(KIT.heal * 100)}%`, '#9fd8c8');
+}
 function applyEquip() {
   const m = computeMods(inv.stats);
   player.upgrade(m);
@@ -588,7 +595,7 @@ const pauseUI = (on) => { if (on) document.exitPointerLock?.(); };
 const shop = new DoctorShop({ inv, audio, blocked, pause: pauseUI, onChange: applyEquip });
 const pack = new Backpack({
   inv, audio, settings, blocked: () => !started || story.blocking || shop.open || zones.cleared || resultEl.classList.contains('on'), pause: pauseUI,
-  stats, applySettings,
+  stats, applySettings, useKit,
   restart: () => (mode === 'endless' ? startEndless() : newGame(false)),
   save: () => slotUI.show('save', saveGame),
   lobby: toLobby,
@@ -597,6 +604,7 @@ applySettings(settings);
 
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') audio.toggleMute();
+  if (started && e.code === 'KeyQ' && !blocked()) useKit();
   if (!started || mode !== 'story') return;
   if (e.code === 'KeyR' && player.dead) retryZone();
   else if (e.code === 'KeyR' && zones.cleared) newGame(false);
@@ -648,6 +656,9 @@ $('rankBtn').addEventListener('click', () => {
   $('rankList').innerHTML = rankTable(loadRank());
   rankEl.classList.add('on');
 });
+$('guideBtn').addEventListener('click', () => { audio.unlock(); audio.select(); $('guide').classList.add('on'); $('guide').querySelector('.gd-body').scrollTop = 0; });
+$('guideClose').addEventListener('click', () => { audio.select(); $('guide').classList.remove('on'); });
+$('guide').addEventListener('click', (e) => e.stopPropagation());
 $('rankClose').addEventListener('click', () => { audio.select(); rankEl.classList.remove('on'); });
 
 // ---- 저장 / 불러오기 / 로비 ----
@@ -686,7 +697,7 @@ function loadGame(sv) {
   clearField();
   // 예전 저장(칩 방식)은 산 칩 하나당 부품 150개로 돌려준다
   const old = sv.inv.stats ? 0 : (sv.inv.owned?.length || 0) * 150;
-  inv = { credits: (sv.inv.credits || 0) + old, kills: sv.inv.kills || 0, stats: { ...(sv.inv.stats || {}) } };
+  inv = { credits: (sv.inv.credits || 0) + old, kits: sv.inv.kits ?? 1, kills: sv.inv.kills || 0, stats: { ...(sv.inv.stats || {}) } };
   zoneCredits = inv.credits; zoneKills = inv.kills;
   shop.ctx.inv = pack.ctx.inv = inv;
   shop.reset(); shop.calls = sv.shopCalls || 0; pack.close();

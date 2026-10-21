@@ -1,4 +1,4 @@
-import { STATS, statById, statLevel, statPrice, statMaxed } from './chips.js';
+import { KIT, STATS, statById, statLevel, statPrice, statMaxed } from './chips.js';
 import { STORY, WHO } from './story.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +51,13 @@ export class DoctorShop {
     this.ctx.pause(false);
   }
 
+  _buyKit() {
+    const inv = this.ctx.inv;
+    if (inv.credits < KIT.price || inv.kits >= KIT.max) return this._deny();
+    inv.credits -= KIT.price; inv.kits++;
+    this.ctx.audio.chip?.();
+    this.render();
+  }
   _buy(id) {
     const inv = this.ctx.inv, st = statById(id), lv = statLevel(inv.stats, id), price = st && statPrice(st, lv);
     if (!st || statMaxed(st, lv) || inv.credits < price) return this._deny();
@@ -65,7 +72,8 @@ export class DoctorShop {
 
   render() {
     const inv = this.ctx.inv;
-    let rows = '';
+    const full = inv.kits >= KIT.max;
+    let rows = `<div class="sh-it kit"><div><b>${KIT.name} <em>보유 ${inv.kits} / ${KIT.max}</em></b><span>최대 체력의 ${KIT.heal * 100}% 회복 (Q 또는 배낭에서 사용)</span></div><button data-id="kit" ${full || inv.credits < KIT.price ? 'disabled' : ''}>${full ? '가득' : '⚙ ' + KIT.price}</button></div>`;
     for (const st of STATS) {
       const lv = statLevel(inv.stats, st.id), maxed = statMaxed(st, lv), price = statPrice(st, lv);
       rows += `<div class="sh-it${maxed ? ' own' : ''}" data-row="${st.id}"><div><b>${esc(st.name)} <em>Lv ${lv}${st.max != null ? ' / ' + st.max : ''}</em></b><span>단계마다 ${esc(st.unit)}</span></div>` +
@@ -79,7 +87,7 @@ export class DoctorShop {
       `<p class="sh-note">같은 스탯을 여러 번 올릴 수 있어요 · 올릴수록 필요한 부품이 늘어나요</p>` +
       `<div class="sh-list">${rows}</div><button class="btn alt sh-close">통신 종료 (C)</button></div>`;
     this.panel.scrollTop = keep;
-    this.panel.querySelectorAll('.sh-it button[data-id]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); this._buy(b.dataset.id); }));
+    this.panel.querySelectorAll('.sh-it button[data-id]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); b.dataset.id === 'kit' ? this._buyKit() : this._buy(b.dataset.id); }));
     this.panel.querySelector('.sh-close').addEventListener('click', (e) => { e.stopPropagation(); this.hide(); });
   }
 }
@@ -89,7 +97,7 @@ export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true,
 
 export class Backpack {
   constructor(ctx) {
-    this.ctx = ctx; // { inv, pause(bool), applySettings(s), settings, stats(), restart(), save(), lobby() }
+    this.ctx = ctx; // { inv, useKit(), pause(bool), applySettings(s), settings, stats(), restart(), save(), lobby() }
     this.el = $('pack');
     this.setEl = $('settings');
     this.gear = $('gearBtn');
@@ -143,9 +151,10 @@ export class Backpack {
     }).join('') : '<p class="empty">아직 올린 스탯이 없다. 전투가 끝난 뒤 박사를 호출(C)하면 기계 부품으로 스탯을 올릴 수 있다.</p>';
     this.el.innerHTML =
       `<div class="pk-box"><div class="pk-head"><b>배낭</b><span>⚙ 기계 부품 ${inv.credits}</span></div>` +
-      `<div class="pk-cols"><div class="pk-stats"><h4>능력치</h4>${st.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>` +
+      `<div class="pk-cols"><div class="pk-stats"><h4>능력치</h4>${st.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}<h4>아이템</h4><div class="pk-kit"><span>${KIT.name} × ${inv.kits}</span><button class="btn" id="useKit" ${inv.kits ? '' : 'disabled'}>사용 (Q)</button></div></div>` +
       `<div class="pk-chips"><h4>올린 스탯</h4><div class="pk-owned">${upList}</div></div></div>` +
       `<p class="pk-foot">Tab / I 로 열고 닫기 · 배낭을 여는 동안 게임이 멈춰요 · 톱니바퀴 = 설정</p></div>`;
+    this.el.querySelector('#useKit')?.addEventListener('click', (e) => { e.stopPropagation(); this.ctx.useKit(); this.render(); });
   }
 
   _renderSettings() {
