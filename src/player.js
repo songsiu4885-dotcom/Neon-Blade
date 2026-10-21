@@ -213,6 +213,7 @@ export class Player {
       return false;
     }
     dmg *= this.mods.dmgTaken * (this.dmgScale ?? 1.35); // 깊은 구역일수록 아프다 (구역 진행이 정한다)
+    dmg *= src?.atkMul ?? src?.owner?.atkMul ?? 1; // 적마다 따로 붙는 공격력 배율 (무한 모드 일반 적)
     this.hp = Math.max(0, this.hp - dmg);
     this.invuln = 0.5;
     this.stagger = 0.3;

@@ -478,6 +478,39 @@ bind('resHome', () => toLobby());
 bind('homeBtn1', () => toLobby());
 bind('homeBtn2', () => toLobby());
 
+// ---- 카메라 자동 회전: 화면에 적이 하나도 안 보이면 가장 가까운 적 쪽으로 천천히 돌린다 ----
+// 마우스·드래그로 시점을 움직이는 동안에는 끼어들지 않는다
+const cam = { idle: 0, hidden: 0, target: null };
+const _cf = new THREE.Vector3(), SEEN = Math.cos(THREE.MathUtils.degToRad(40)), CENTER = Math.cos(THREE.MathUtils.degToRad(14));
+const angTo = (e) => { const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z, d = Math.hypot(dx, dz) || 1e-6; return { dx, dz, d, c: (_cf.x * dx + _cf.z * dz) / d }; };
+function autoCam(dt, inp) {
+  if (settings.autoCam === false || player.dead) { cam.target = null; return; }
+  if (Math.abs(inp.lookDX) > 0.5 || Math.abs(inp.lookDY) > 0.5) { cam.idle = 0; cam.target = null; return; }
+  cam.idle += dt;
+  rig.forward(_cf);
+  if (cam.target) { // 돌리는 중: 그 적이 화면 가운데 가까이 오면 멈춘다
+    const e = cam.target;
+    if (!e.alive || e.dead) { cam.target = null; return; }
+    const a = angTo(e);
+    if (a.c > CENTER) { cam.target = null; cam.hidden = 0; return; }
+    let diff = Math.atan2(-a.dx, -a.dz) - rig.yaw;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    rig.yaw += Math.sign(diff) * Math.min(Math.abs(diff), Math.max(1.2, Math.abs(diff) * 3.5) * dt);
+    return;
+  }
+  let near = null, nd = 1e9;
+  for (const e of combat.enemies) {
+    if (!e.alive || e.dead) continue;
+    const a = angTo(e);
+    if (a.d > 60) continue;
+    if (a.c > SEEN) { cam.hidden = 0; return; } // 한 마리라도 보이면 그대로
+    if (a.d < nd) { nd = a.d; near = e; }
+  }
+  if (!near) { cam.hidden = 0; return; }
+  cam.hidden += dt;
+  if (cam.hidden > 0.6 && cam.idle > 0.8) cam.target = near;
+}
+
 // ---- 스탯 강화 반영 ----
 function applyEquip() {
   const m = computeMods(inv.stats);
@@ -740,6 +773,7 @@ function frame() {
 
   const inp = input.poll();
   rig.applyLook(dt, inp, input.isTouch);
+  autoCam(dt, inp);
   player.update(simDt, inp, rig, combat);
   combat.update(eDt, player);
   zones.update(simDt, player);
@@ -810,7 +844,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 frame();
-window.__game = { renderer, player, rig, combat, fx, waves: zones, zones, endless, audio, story, env, newGame, retryZone, startEndless, toLobby, get inv() { return inv; }, start: () => $('goBtn').click() };
+window.__game = { renderer, player, rig, combat, fx, waves: zones, zones, endless, audio, story, env, newGame, retryZone, startEndless, toLobby, autoCam, get inv() { return inv; }, start: () => $('goBtn').click() };
 
 // 필름 그레인 (사진 같은 질감)
 {

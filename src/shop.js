@@ -85,7 +85,7 @@ export class DoctorShop {
 }
 
 // ---- 배낭: 능력치 / 올린 스탯 + 설정 ----
-export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'auto', help: true, rainFx: true, rainSound: true };
+export const SETTINGS_DEFAULT = { master: 0.8, music: 0.6, sens: 1, shake: true, quality: 'auto', help: true, rainFx: true, rainSound: true, autoCam: true };
 
 export class Backpack {
   constructor(ctx) {
@@ -158,6 +158,7 @@ export class Backpack {
       `<label class="row">화면 흔들림<input type="checkbox" data-k="shake" ${s.shake ? 'checked' : ''}></label>` +
       `<label class="row">비 내리는 효과<input type="checkbox" data-k="rainFx" ${s.rainFx ? 'checked' : ''}></label>` +
       `<label class="row">빗소리<input type="checkbox" data-k="rainSound" ${s.rainSound ? 'checked' : ''}></label>` +
+      `<label class="row">카메라 자동 회전 (적 찾기)<input type="checkbox" data-k="autoCam" ${s.autoCam !== false ? 'checked' : ''}></label>` +
       `<label class="row">조작 안내 표시<input type="checkbox" data-k="help" ${s.help ? 'checked' : ''}></label>` +
       `<label class="row">그래픽 품질<select data-k="quality"><option value="auto"${s.quality === 'auto' ? ' selected' : ''}>자동 (권장)</option><option value="high"${s.quality === 'high' ? ' selected' : ''}>높음</option><option value="mid"${s.quality === 'mid' ? ' selected' : ''}>중간</option><option value="low"${s.quality === 'low' ? ' selected' : ''}>낮음 (빠름)</option></select></label>` +
       `<div class="set-btns"><button class="btn" id="setSave">저장하기</button><button class="btn alt" id="setLobby">로비로 나가기</button><button class="btn alt" id="setRestart">처음부터</button></div>`;

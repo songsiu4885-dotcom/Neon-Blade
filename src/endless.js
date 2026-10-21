@@ -13,7 +13,7 @@ const POOL = [
 ];
 const HEAVY = new Set(['mech', 'sentinel', 'exec']);
 const MIN_DIST = { sniper: 20, sentinel: 14, gunner: 14, default: 11 };
-const MAX_ALIVE = 14;
+const MAX_ALIVE = 16;
 export const BOSS_EVERY = 5;
 const REST = 7;       // 웨이브 사이 쉬는 시간 (초)
 const REST_BOSS = 11; // 보스를 잡은 뒤
@@ -66,12 +66,16 @@ export class Endless {
       if (type === 'adam') e.bounty = 300;
       e.bounty = Math.round(e.bounty * (1 + 0.1 * (n - 1)));
     } else {
-      e.maxHp = Math.round(e.maxHp * (1 + 0.075 * (w - 1))); e.hp = e.maxHp;
+      // 일반 적: 수는 많고 체력은 낮게, 대신 아프게 때린다
+      e.maxHp = Math.round(e.maxHp * 0.65 * (1 + 0.06 * (w - 1))); e.hp = e.maxHp;
+      e.atkMul = 1.3 + 0.03 * w;
       e.score = 1;
       e.bounty = Math.round(e.bounty * 0.6); // 무한 모드는 적이 많아서 하나당 부품은 조금 적게
     }
     this.members.push(e); this.combat.add(e); return e;
   }
+
+  _cap() { return Math.min(MAX_ALIVE, 6 + Math.floor(this.wave / 2)); } // 한꺼번에 나와 있는 일반 적 수
 
   _pick(w, heavyLeft) {
     const opts = POOL.filter(([t, from]) => w >= from && (!HEAVY.has(t) || heavyLeft > 0));
@@ -104,9 +108,9 @@ export class Endless {
       this.hooks.onWave?.(w, key);
     } else {
       this.bossWave = false;
-      this.queue = Math.min(42, 4 + Math.round(w * 1.3));
+      this.queue = Math.min(70, 7 + Math.round(w * 2.2));
       this.heavyLeft = w < 7 ? 0 : 1 + Math.floor(w / 8);
-      const first = Math.min(this.queue, 4 + Math.floor(w / 2), MAX_ALIVE);
+      const first = Math.min(this.queue, this._cap());
       for (let i = 0; i < first; i++) this._spawnOne(player);
       this.hooks.onWave?.(w, null);
     }
@@ -142,7 +146,7 @@ export class Endless {
     const alive = this.members.length;
     if (this.queue > 0) {
       // 남은 적이 줄면 증원이 들어온다
-      if (this.timer <= 0 && alive < Math.min(MAX_ALIVE, 4 + Math.floor(this.wave / 2))) { this._spawnOne(player); this.timer = 0.35; }
+      if (this.timer <= 0 && alive < this._cap()) { this._spawnOne(player); this.timer = 0.3; }
       return;
     }
     if (alive === 0) {
